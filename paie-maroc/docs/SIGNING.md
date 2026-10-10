@@ -1,35 +1,33 @@
 # Publication et signature
 
-Une version publique est créée uniquement par `.github/workflows/release.yml` lors de l’envoi d’un tag `vX.Y.Z`. Le workflow est volontairement bloquant : aucun exécutable Windows ou macOS non signé ne peut apparaître dans GitHub Releases.
+Une version est créée par `.github/workflows/release.yml` lors de l’envoi d’un tag `vX.Y.Z`. Tant que les certificats commerciaux ne sont pas disponibles, les releases sont publiées comme **préversions auto-signées** avec sommes SHA-256 et attestations de provenance GitHub.
 
-## Certificats requis
+## Mode provisoire actuel
 
-Ajoutez ces secrets dans **Settings → Secrets and variables → Actions** du dépôt.
+- Windows génère sur le runner un certificat Authenticode auto-signé éphémère. L’application, le désinstalleur NSIS et l’installateur sont signés puis vérifiés avant publication.
+- macOS produit une application universelle Intel/Apple Silicon avec signature ad hoc, puis signe également le DMG.
+- Linux produit un paquet Debian x64.
 
-### Windows
+Ces signatures détectent une modification accidentelle du paquet, mais ne créent pas une chaîne de confiance publique. Microsoft SmartScreen et macOS Gatekeeper peuvent donc afficher un avertissement. Le workflow nomme explicitement les fichiers `SELF-SIGNED`, ajoute `SELF_SIGNED_NOTICE.txt` et marque la release comme préversion.
 
-- `WINDOWS_CERTIFICATE_BASE64` : certificat de signature de code Authenticode `.pfx`, encodé avec `base64 -i certificat.pfx | pbcopy` sur macOS.
-- `WINDOWS_CERTIFICATE_PASSWORD` : mot de passe du `.pfx`.
+## Créer une préversion
 
-Le workflow signe et horodate trois éléments : l’application, le désinstalleur NSIS et l’installateur. Il les vérifie ensuite avec la politique Authenticode Windows. Utilisez un certificat délivré à l’éditeur PaieMaroc ; un certificat EV aide aussi à établir plus rapidement la réputation Microsoft SmartScreen.
-
-### macOS
-
-- `APPLE_CERTIFICATE_BASE64` et `APPLE_CERTIFICATE_PASSWORD` : certificat **Developer ID Application** exporté en `.p12`.
-- `APPLE_SIGNING_IDENTITY` : `Developer ID Application: Nom (TEAMID)`.
-- `APPLE_ID`, `APPLE_APP_PASSWORD`, `APPLE_TEAM_ID` : compte Apple, mot de passe spécifique à l’app et Team ID.
-
-L’application universelle Intel/Apple Silicon reçoit le runtime renforcé. Le DMG avec raccourci vers Applications est envoyé au service notarial Apple, agrafé, puis contrôlé par `codesign`, `notarytool`, `stapler` et Gatekeeper (`spctl`).
-
-## Créer une version
-
-Vérifiez d’abord la branche principale, puis poussez un tag signé :
+Vérifiez la branche principale, puis poussez un tag annoté :
 
 ```bash
 git switch main
 git pull --ff-only
-git tag -s v1.0.0 -m "PaieMaroc 1.0.0"
-git push origin v1.0.0
+git tag -a v0.1.0 -m "PaieMaroc 0.1.0"
+git push origin v0.1.0
 ```
 
-La release n’est publiée que si Windows, macOS et Linux réussissent tous. Elle contient l’installateur Windows, le DMG notarisé, le paquet Debian, `SHA256SUMS.txt` et les attestations de provenance GitHub. Ne recréez jamais manuellement une release officielle avec des binaires locaux.
+La release n’est publiée que si Windows, macOS et Linux réussissent tous. Ne publiez jamais manuellement un binaire qui n’a pas traversé ce workflow.
+
+## Passage à une signature officielle
+
+Pour supprimer les avertissements système, remplacez le mode provisoire par :
+
+- un certificat Authenticode public pour Windows, idéalement EV ;
+- un certificat Apple **Developer ID Application**, le runtime renforcé et la notarisation Apple pour macOS.
+
+La future migration devra rétablir les contrôles `signtool /pa`, `notarytool`, `stapler` et Gatekeeper avant de retirer la mention `SELF-SIGNED` ou le statut de préversion.

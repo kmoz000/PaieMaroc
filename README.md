@@ -4,6 +4,8 @@ PaieMaroc est une application de bureau libre, en français, destinée aux respo
 
 [Télécharger la dernière version](https://kmoz000.github.io/PaieMaroc/) · [Voir les versions](https://github.com/kmoz000/PaieMaroc/releases) · [Signaler un problème](https://github.com/kmoz000/PaieMaroc/issues)
 
+> Les premiers paquets sont des préversions auto-signées. SmartScreen ou Gatekeeper peut afficher un avertissement ; vérifiez `SHA256SUMS.txt` et l’attestation GitHub fournis avec chaque release.
+
 ## Points forts
 
 - Parcours guidé en français, avec validation avant chaque export.

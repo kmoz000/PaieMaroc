@@ -1,4 +1,4 @@
-name: Version officielle signée
+name: Version provisoire auto-signée
 
 on:
   push:
@@ -26,24 +26,15 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            label: Windows x64 signé
+            label: Windows x64 auto-signé
             artifact: windows-amd64
           - os: macos-15
-            label: macOS universel signé et notarisé
+            label: macOS universel avec signature ad hoc
             artifact: macos-universal
           - os: ubuntu-24.04
             label: Ubuntu/Debian x64
             artifact: linux-amd64
     runs-on: ${{ matrix.os }}
-    env:
-      APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
-      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
-      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
     defaults:
       run:
         working-directory: paie-maroc
@@ -60,24 +51,6 @@ jobs:
             echo "Tag invalide: $GITHUB_REF_NAME (format attendu: v1.2.3)" >&2
             exit 1
           fi
-
-      - name: Exiger les secrets Apple
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          missing=0
-          for name in APPLE_CERTIFICATE_BASE64 APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_APP_PASSWORD APPLE_TEAM_ID; do
-            if [ -z "${!name}" ]; then echo "Secret manquant: $name" >&2; missing=1; fi
-          done
-          exit "$missing"
-
-      - name: Exiger les secrets Windows
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $names = 'WINDOWS_CERTIFICATE_BASE64', 'WINDOWS_CERTIFICATE_PASSWORD'
-          $missing = $names | Where-Object { -not (Get-Item "Env:$_" -ErrorAction SilentlyContinue).Value }
-          if ($missing) { throw "Secrets manquants: $($missing -join ', ')" }
 
       - uses: actions/setup-go@v7
         with:
@@ -104,16 +77,33 @@ jobs:
       - name: Tester avant emballage
         run: go test ./...
 
-      - name: Préparer le certificat Windows
+      - name: Créer le certificat Windows auto-signé éphémère
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $certificate = Join-Path $env:RUNNER_TEMP 'paie-maroc-authenticode.pfx'
-          [IO.File]::WriteAllBytes($certificate, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
+          $publicCertificate = Join-Path $env:RUNNER_TEMP 'paie-maroc-authenticode.cer'
+          $passwordPlain = [Guid]::NewGuid().ToString('N')
+          $password = ConvertTo-SecureString $passwordPlain -AsPlainText -Force
+          $signer = New-SelfSignedCertificate `
+            -Type CodeSigningCert `
+            -Subject 'CN=PaieMaroc Provisional Release, O=PaieMaroc, C=MA' `
+            -KeyAlgorithm RSA `
+            -KeyLength 3072 `
+            -HashAlgorithm SHA256 `
+            -KeyExportPolicy Exportable `
+            -CertStoreLocation 'Cert:\CurrentUser\My' `
+            -NotAfter (Get-Date).AddYears(3)
+          Export-PfxCertificate -Cert $signer -FilePath $certificate -Password $password | Out-Null
+          Export-Certificate -Cert $signer -FilePath $publicCertificate | Out-Null
+          Import-Certificate -FilePath $publicCertificate -CertStoreLocation 'Cert:\CurrentUser\Root' | Out-Null
           "PAIEMAROC_CERTIFICATE_PATH=$certificate" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "PAIEMAROC_SELF_SIGNED=true" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "PAIEMAROC_SELF_SIGNED_THUMBPRINT=$($signer.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "WINDOWS_CERTIFICATE_PASSWORD=$passwordPlain" | Out-File -FilePath $env:GITHUB_ENV -Append
           "PAIEMAROC_SIGN_SCRIPT=$env:GITHUB_WORKSPACE\paie-maroc\scripts\sign-windows.ps1" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: Compiler et signer l'installateur Windows
+      - name: Compiler et auto-signer l'installateur Windows
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
@@ -121,64 +111,41 @@ jobs:
           $installers = @(Get-ChildItem build/bin/*-installer.exe)
           if ($installers.Count -ne 1) { throw "Installateur NSIS introuvable ou ambigu." }
           $installer = $installers[0]
-          Rename-Item $installer.FullName "PaieMaroc-$env:GITHUB_REF_NAME-Windows-x64-SIGNED-Setup.exe"
+          Rename-Item $installer.FullName "PaieMaroc-$env:GITHUB_REF_NAME-Windows-x64-SELF-SIGNED-Setup.exe"
           Remove-Item build/bin/PaieMaroc.exe
 
       - name: Vérifier l'installateur Windows
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $installers = @(Get-ChildItem build/bin/*-SIGNED-Setup.exe)
-          if ($installers.Count -ne 1) { throw "Installateur signé introuvable ou ambigu." }
+          $installers = @(Get-ChildItem build/bin/*-SELF-SIGNED-Setup.exe)
+          if ($installers.Count -ne 1) { throw "Installateur auto-signé introuvable ou ambigu." }
           $installer = $installers[0]
           & "$env:GITHUB_WORKSPACE\paie-maroc\scripts\sign-windows.ps1" $installer.FullName -VerifyOnly
           Remove-Item $env:PAIEMAROC_CERTIFICATE_PATH -Force
+          Remove-Item "Cert:\CurrentUser\Root\$env:PAIEMAROC_SELF_SIGNED_THUMBPRINT" -Force
+          Remove-Item "Cert:\CurrentUser\My\$env:PAIEMAROC_SELF_SIGNED_THUMBPRINT" -Force
 
       - name: Compiler macOS universel
         if: runner.os == 'macOS'
         run: wails build -clean -trimpath -platform darwin/universal -o PaieMaroc
 
-      - name: Importer le certificat Apple
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          certificate="$RUNNER_TEMP/paie-maroc-developer-id.p12"
-          keychain="$RUNNER_TEMP/paie-maroc.keychain-db"
-          printf '%s' "$APPLE_CERTIFICATE_BASE64" | base64 --decode > "$certificate"
-          security create-keychain -p actions "$keychain"
-          security set-keychain-settings -lut 21600 "$keychain"
-          security unlock-keychain -p actions "$keychain"
-          security import "$certificate" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
-          security list-keychain -d user -s "$keychain"
-          security set-key-partition-list -S apple-tool:,apple: -s -k actions "$keychain"
-          security find-identity -v -p codesigning "$keychain"
-          rm -f "$certificate"
-
-      - name: Signer, notariser et agrafer macOS
+      - name: Auto-signer et emballer macOS
         if: runner.os == 'macOS'
         shell: bash
         run: |
           app="build/bin/PaieMaroc.app"
-          dmg="build/bin/PaieMaroc-${GITHUB_REF_NAME}-macOS-universal-SIGNED-NOTARIZED.dmg"
-          notary_zip="$RUNNER_TEMP/PaieMaroc-notary.zip"
+          dmg="build/bin/PaieMaroc-${GITHUB_REF_NAME}-macOS-universal-SELF-SIGNED.dmg"
           staging="$RUNNER_TEMP/paie-maroc-dmg"
-          codesign --force --deep --options runtime --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$app"
+          codesign --force --deep --sign - "$app"
           codesign --verify --deep --strict --verbose=2 "$app"
-          ditto -c -k --keepParent "$app" "$notary_zip"
-          xcrun notarytool submit "$notary_zip" --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
-          xcrun stapler staple "$app"
-          xcrun stapler validate "$app"
-          spctl --assess --type execute --verbose=2 "$app"
           mkdir -p "$staging"
           cp -R "$app" "$staging/PaieMaroc.app"
           ln -s /Applications "$staging/Applications"
           hdiutil create -volname "PaieMaroc" -srcfolder "$staging" -ov -format UDZO "$dmg"
-          codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$dmg"
-          xcrun notarytool submit "$dmg" --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
-          xcrun stapler staple "$dmg"
-          xcrun stapler validate "$dmg"
-          spctl --assess --type open --context context:primary-signature --verbose=2 "$dmg"
-          rm -rf "$app" "$staging" "$notary_zip"
+          codesign --force --sign - "$dmg"
+          codesign --verify --strict --verbose=2 "$dmg"
+          rm -rf "$app" "$staging"
 
       - name: Compiler Linux
         if: runner.os == 'Linux'
@@ -219,11 +186,23 @@ jobs:
         shell: bash
         run: |
           shopt -s nullglob
-          windows=(artifacts/*-Windows-x64-SIGNED-Setup.exe)
-          macos=(artifacts/*-macOS-universal-SIGNED-NOTARIZED.dmg)
+          windows=(artifacts/*-Windows-x64-SELF-SIGNED-Setup.exe)
+          macos=(artifacts/*-macOS-universal-SELF-SIGNED.dmg)
           linux=(artifacts/*-Linux-amd64.deb)
           [ "${#windows[@]}" -eq 1 ] && [ "${#macos[@]}" -eq 1 ] && [ "${#linux[@]}" -eq 1 ]
-          ! find artifacts -type f -iname '*unsigned*' | grep -q .
+      - name: Ajouter l'avertissement de confiance
+        shell: bash
+        run: |
+          cat > artifacts/SELF_SIGNED_NOTICE.txt <<'EOF'
+          VERSION PROVISOIRE AUTO-SIGNEE
+
+          Windows utilise un certificat Authenticode auto-signe et macOS une
+          signature ad hoc. Ces signatures permettent de verifier l'integrite
+          des paquets, mais elles ne sont pas reconnues par les magasins de
+          confiance Microsoft et Apple. SmartScreen ou Gatekeeper peut donc
+          afficher un avertissement. Verifiez SHA256SUMS.txt et l'attestation
+          de provenance GitHub avant installation.
+          EOF
       - name: Créer les sommes SHA-256
         run: cd artifacts && sha256sum * | sort -k2 > SHA256SUMS.txt
       - name: Attester la provenance
@@ -233,9 +212,20 @@ jobs:
       - name: Publier la version
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh release create "${GITHUB_REF_NAME}" artifacts/*
-          --repo "${GITHUB_REPOSITORY}"
-          --verify-tag
-          --generate-notes
-          --title "PaieMaroc ${GITHUB_REF_NAME}"
+        shell: bash
+        run: |
+          cat > "$RUNNER_TEMP/release-notes.md" <<'EOF'
+          > [!WARNING]
+          > Version provisoire auto-signée. Windows SmartScreen et macOS
+          > Gatekeeper peuvent afficher un avertissement. Vérifiez les sommes
+          > SHA-256 et l'attestation GitHub avant installation.
+
+          Cette release contient l'installateur Windows x64, le DMG macOS
+          universel et le paquet Debian x64.
+          EOF
+          gh release create "${GITHUB_REF_NAME}" artifacts/* \
+            --repo "${GITHUB_REPOSITORY}" \
+            --verify-tag \
+            --prerelease \
+            --notes-file "$RUNNER_TEMP/release-notes.md" \
+            --title "PaieMaroc ${GITHUB_REF_NAME} · auto-signée"

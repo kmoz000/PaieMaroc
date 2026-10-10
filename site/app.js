@@ -1,10 +1,10 @@
 const repository = "kmoz000/PaieMaroc";
-const fallback = `https://github.com/${repository}/releases/latest`;
+const fallback = `https://github.com/${repository}/releases`;
 
 function wantedAsset(platform, assets) {
   const patterns = {
-    Windows: [/Windows.*SIGNED-Setup\.exe$/i],
-    macOS: [/macOS.*SIGNED-NOTARIZED\.dmg$/i],
+    Windows: [/Windows.*SELF-SIGNED-Setup\.exe$/i, /Windows.*SIGNED-Setup\.exe$/i],
+    macOS: [/macOS.*SELF-SIGNED\.dmg$/i, /macOS.*SIGNED-NOTARIZED\.dmg$/i],
     Linux: [/Linux.*\.deb$/i],
   };
   return patterns[platform]
@@ -24,13 +24,15 @@ async function loadRelease() {
   const status = document.querySelector("#release-status");
   try {
     const response = await fetch(
-      `https://api.github.com/repos/${repository}/releases/latest`,
+      `https://api.github.com/repos/${repository}/releases?per_page=10`,
       {
         headers: { Accept: "application/vnd.github+json" },
       },
     );
     if (!response.ok) throw new Error(`GitHub ${response.status}`);
-    const release = await response.json();
+    const releases = await response.json();
+    const release = releases.find((item) => !item.draft);
+    if (!release) throw new Error("Aucune version publiée");
     document.querySelectorAll("[data-platform]").forEach((link) => {
       const asset = wantedAsset(link.dataset.platform, release.assets || []);
       if (asset) link.href = asset.browser_download_url;
@@ -42,7 +44,8 @@ async function loadRelease() {
       smart.href = smartAsset.browser_download_url;
       smart.firstChild.textContent = `Télécharger pour ${platform} `;
     }
-    status.textContent = `${release.tag_name} · publiée le ${new Intl.DateTimeFormat("fr-MA", { dateStyle: "long" }).format(new Date(release.published_at))}`;
+    const channel = release.prerelease ? "version provisoire auto-signée" : "version officielle";
+    status.textContent = `${release.tag_name} · ${channel} · publiée le ${new Intl.DateTimeFormat("fr-MA", { dateStyle: "long" }).format(new Date(release.published_at))}`;
   } catch (_) {
     status.textContent =
       "Les premiers binaires seront disponibles à la prochaine version.";

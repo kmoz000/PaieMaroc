@@ -21,13 +21,17 @@ if (-not $signTool) {
 }
 
 if (-not $VerifyOnly) {
-    & $signTool.FullName sign `
-        /fd SHA256 `
-        /td SHA256 `
-        /tr 'https://timestamp.digicert.com' `
-        /f $env:PAIEMAROC_CERTIFICATE_PATH `
-        /p $env:WINDOWS_CERTIFICATE_PASSWORD `
-        $Path
+    $arguments = @(
+        'sign',
+        '/fd', 'SHA256',
+        '/f', $env:PAIEMAROC_CERTIFICATE_PATH,
+        '/p', $env:WINDOWS_CERTIFICATE_PASSWORD
+    )
+    if ($env:PAIEMAROC_SELF_SIGNED -ne 'true') {
+        $arguments += @('/td', 'SHA256', '/tr', 'https://timestamp.digicert.com')
+    }
+    $arguments += $Path
+    & $signTool.FullName @arguments
 
     if ($LASTEXITCODE -ne 0) {
         throw "Échec de la signature Authenticode de $Path"
