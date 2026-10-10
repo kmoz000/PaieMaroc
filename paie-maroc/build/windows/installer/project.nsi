@@ -34,6 +34,16 @@ Unicode true
 ####
 !include "wails_tools.nsh"
 
+## Sign the application before NSIS embeds it in the installer.
+!if "$%PAIEMAROC_SIGN_SCRIPT%" != ""
+  !ifdef ARG_WAILS_AMD64_BINARY
+    !system 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$%PAIEMAROC_SIGN_SCRIPT%" "${ARG_WAILS_AMD64_BINARY}"' = 0
+  !endif
+  !ifdef ARG_WAILS_ARM64_BINARY
+    !system 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$%PAIEMAROC_SIGN_SCRIPT%" "${ARG_WAILS_ARM64_BINARY}"' = 0
+  !endif
+!endif
+
 # The version information for this two must consist of 4 parts
 VIProductVersion "${INFO_PRODUCTVERSION}.0"
 VIFileVersion    "${INFO_PRODUCTVERSION}.0"
@@ -64,11 +74,15 @@ ManifestDPIAware true
 
 !insertmacro MUI_UNPAGE_INSTFILES # Uinstalling page
 
-!insertmacro MUI_LANGUAGE "English" # Set the Language of the installer
+!insertmacro MUI_LANGUAGE "French" # Interface d'installation PaieMaroc
 
 ## The following two statements can be used to sign the installer and the uninstaller. The path to the binaries are provided in %1
-#!uninstfinalize 'signtool --file "%1"'
-#!finalize 'signtool --file "%1"'
+## The release workflow sets PAIEMAROC_SIGN_SCRIPT. Both executables must be
+## signed: Windows otherwise identifies the uninstaller as an unknown publisher.
+!if "$%PAIEMAROC_SIGN_SCRIPT%" != ""
+!uninstfinalize 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$%PAIEMAROC_SIGN_SCRIPT%" "%1"' = 0
+!finalize 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$%PAIEMAROC_SIGN_SCRIPT%" "%1"' = 0
+!endif
 
 Name "${INFO_PRODUCTNAME}"
 OutFile "..\..\bin\${INFO_PROJECTNAME}-${ARCH}-installer.exe" # Name of the installer's file.

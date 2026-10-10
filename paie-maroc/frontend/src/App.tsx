@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import type { FormEvent, ReactElement } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
+import type { FormEvent, ReactElement, ReactNode } from "react";
 import {
   AttendanceProfiles,
   CalculatePayroll,
@@ -28,6 +28,11 @@ import {
   TestAttendanceDevice,
   ValidatePayroll,
 } from "../wailsjs/go/main/App";
+import {
+  Quit,
+  WindowMinimise,
+  WindowToggleMaximise,
+} from "../wailsjs/runtime/runtime";
 import "./App.css";
 
 type User = {
@@ -107,6 +112,7 @@ type Route =
   | "access";
 
 const isNative = Boolean((window as unknown as { go?: unknown }).go);
+const isMac = /Mac/i.test(navigator.platform);
 const demoEmployees: Employee[] = [
   {
     id: "AT-0018",
@@ -352,7 +358,12 @@ function localCalc(employees: Employee[]): Batch {
 
 export default function App() {
   const [state, setState] = useState<AuthState | null>(null),
-    [startupError, setStartupError] = useState("");
+    [startupError, setStartupError] = useState(""),
+    [bootReady, setBootReady] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setBootReady(true), 720);
+    return () => window.clearTimeout(timer);
+  }, []);
   useEffect(() => {
     if (!isNative) {
       setState({ setupRequired: false, authenticated: true, user: demoUser });
@@ -362,27 +373,109 @@ export default function App() {
       .then((value) => setState(value as AuthState))
       .catch((error) => setStartupError(friendlyError(error)));
   }, []);
-  if (startupError) return <CenteredError message={startupError} />;
-  if (!state)
+  if (startupError)
     return (
-      <div className="boot">
-        <Brand />
-        <span className="spinner" />
-        <p>Ouverture de votre espace sécurisé…</p>
-      </div>
+      <DesktopFrame>
+        <CenteredError message={startupError} />
+      </DesktopFrame>
+    );
+  if (!state || !bootReady)
+    return (
+      <DesktopFrame>
+        <BootSequence />
+      </DesktopFrame>
     );
   if (state.setupRequired)
-    return <AuthScreen mode="setup" onSuccess={setState} />;
+    return (
+      <DesktopFrame>
+        <AuthScreen mode="setup" onSuccess={setState} />
+      </DesktopFrame>
+    );
   if (!state.authenticated || !state.user)
-    return <AuthScreen mode="login" onSuccess={setState} />;
+    return (
+      <DesktopFrame>
+        <AuthScreen mode="login" onSuccess={setState} />
+      </DesktopFrame>
+    );
   return (
-    <Workspace
-      user={state.user}
-      onLogout={async () => {
-        if (isNative) await Logout();
-        setState({ setupRequired: false, authenticated: false });
-      }}
-    />
+    <DesktopFrame>
+      <Workspace
+        user={state.user}
+        onLogout={async () => {
+          if (isNative) await Logout();
+          setState({ setupRequired: false, authenticated: false });
+        }}
+      />
+    </DesktopFrame>
+  );
+}
+
+function DesktopFrame({ children }: { children: ReactNode }) {
+  const toggleMaximise = () => {
+    if (isNative && !isMac) WindowToggleMaximise();
+  };
+  return (
+    <div className={`desktop-window ${isMac ? "platform-mac" : ""}`}>
+      <header className="desktop-titlebar" onDoubleClick={toggleMaximise}>
+        <div className="frame-origin">
+          <LogoMark compact />
+          <strong>PaieMaroc</strong>
+          <span>POSTE LOCAL</span>
+        </div>
+        <div className="frame-center">
+          <i />
+          Espace de paie sécurisé
+        </div>
+        {isNative && !isMac && (
+          <div className="window-controls">
+            <button
+              type="button"
+              onClick={() => WindowMinimise()}
+              aria-label="Réduire la fenêtre"
+            >
+              <i className="minimise" />
+            </button>
+            <button
+              type="button"
+              onClick={() => WindowToggleMaximise()}
+              aria-label="Agrandir ou restaurer la fenêtre"
+            >
+              <i className="maximise" />
+            </button>
+            <button
+              type="button"
+              className="close-window"
+              onClick={() => Quit()}
+              aria-label="Fermer PaieMaroc"
+            >
+              <i className="close" />
+            </button>
+          </div>
+        )}
+      </header>
+      <div className="desktop-body">{children}</div>
+    </div>
+  );
+}
+
+function BootSequence() {
+  return (
+    <div className="boot">
+      <div className="boot-emblem">
+        <LogoMark animated />
+        <span className="orbit-dot" />
+      </div>
+      <Brand wordsOnly />
+      <div className="boot-progress" aria-label="Chargement de PaieMaroc">
+        <i />
+      </div>
+      <div className="boot-stages">
+        <span>Base locale</span>
+        <span>Règles de paie</span>
+        <span>Espace prêt</span>
+      </div>
+      <p>Préparation de votre poste de paie…</p>
+    </div>
   );
 }
 
@@ -663,41 +756,70 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
       setMessage(friendlyError(error));
     }
   }
-  const nav: [Route, string, string][] = [
-    ["overview", "Vue d’ensemble", "grid"],
-    ["employees", "Collaborateurs", "users"],
-    ["payroll", "Préparer la paie", "calc"],
-    ["periods", "Mois & clôtures", "calendar"],
-    ["cnss", "Déclaration CNSS", "shield"],
-    ["exports", "Exports bancaires", "send"],
-    ["devices", "Pointeuses ZKTeco", "device"],
+  const navSections: {
+    label: string;
+    items: [Route, string, string][];
+  }[] = [
+    {
+      label: "PILOTAGE",
+      items: [
+        ["overview", "Vue d’ensemble", "grid"],
+        ["employees", "Collaborateurs", "users"],
+        ["payroll", "Préparer la paie", "calc"],
+        ["periods", "Mois & clôtures", "calendar"],
+      ],
+    },
+    {
+      label: "CONFORMITÉ & SORTIES",
+      items: [
+        ["cnss", "Déclaration CNSS", "shield"],
+        ["exports", "Exports bancaires", "send"],
+      ],
+    },
+    {
+      label: "ATELIER",
+      items: [["devices", "Pointeuses ZKTeco", "device"]],
+    },
   ];
   if (user.role === "admin")
-    nav.push(["access", "Accès & utilisateurs", "key"]);
+    navSections[2].items.push(["access", "Accès & utilisateurs", "key"]);
+  const nav = navSections.flatMap((section) => section.items);
   const activeLabel = nav.find((item) => item[0] === route)?.[1] || "";
+  const activeIndex = nav.findIndex((item) => item[0] === route) + 1;
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <Brand />
-        <nav>
-          {nav.map(([value, label, icon]) => (
-            <button
-              key={value}
-              className={route === value ? "active" : ""}
-              onClick={() => setRoute(value)}
-            >
-              <Icon name={icon} />
-              <span>{label}</span>
-            </button>
+        <nav aria-label="Navigation principale">
+          {navSections.map((section) => (
+            <section key={section.label}>
+              <small>{section.label}</small>
+              {section.items.map(([value, label, icon]) => (
+                <button
+                  key={value}
+                  className={route === value ? "active" : ""}
+                  onClick={() => setRoute(value)}
+                >
+                  <span className="nav-code">
+                    {String(
+                      nav.findIndex((item) => item[0] === value) + 1,
+                    ).padStart(2, "0")}
+                  </span>
+                  <Icon name={icon} />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </section>
           ))}
         </nav>
         <div className="sidebar-bottom">
           <div className="local-pill">
             <Icon name="lock" />
             <span>
-              <strong>Base locale</strong>
-              <small>Droits actifs</small>
+              <strong>Coffre de paie local</strong>
+              <small>SQLite · cet appareil</small>
             </span>
+            <i />
           </div>
           <button className="account" onClick={onLogout}>
             <b>{initials(user.displayName)}</b>
@@ -711,19 +833,22 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
       </aside>
       <main className="app-main">
         <header className="topbar">
-          <div>
-            <span>PaieMaroc</span>
-            <i>/</i>
+          <div className="workspace-title">
+            <span>PM/{String(activeIndex).padStart(2, "0")}</span>
             <strong>{activeLabel}</strong>
+            <small>Gestion de paie marocaine</small>
           </div>
           <div className="top-actions">
             <span className="status-dot">
               <i />
               Enregistré
             </span>
-            <select
+            <SelectField
+              label="Période active"
               value={activePeriod}
-              onChange={(event) => setActivePeriod(event.target.value)}
+              set={setActivePeriod}
+              compact
+              required={false}
             >
               <option value="">Choisir une période</option>
               {periods.map((item) => (
@@ -732,7 +857,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
                   {item.status === "closed" ? "Clôturée" : "Brouillon"}
                 </option>
               ))}
-            </select>
+            </SelectField>
             <button
               className="button primary"
               onClick={() => setPeriodDialog(true)}
@@ -1081,14 +1206,7 @@ function PayrollPage({
                 <p>Une fiche salarié, des valeurs mensuelles indépendantes.</p>
               </div>
               <div className="table-actions">
-                <label className="search">
-                  <Icon name="search" />
-                  <input
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Rechercher un salarié"
-                  />
-                </label>
+                <SearchField value={search} set={setSearch} />
                 <button
                   className="button secondary"
                   onClick={importCSV}
@@ -1460,16 +1578,10 @@ function AccessPage({
             type="password"
             placeholder="12 caractères minimum"
           />
-          <label className="field">
-            Rôle
-            <select
-              value={role}
-              onChange={(event) => setRole(event.target.value)}
-            >
-              <option value="manager">Gestionnaire paie</option>
-              <option value="admin">Administrateur</option>
-            </select>
-          </label>
+          <SelectField label="Rôle" value={role} set={setRole}>
+            <option value="manager">Gestionnaire paie</option>
+            <option value="admin">Administrateur</option>
+          </SelectField>
           <button className="button primary wide">
             Créer le compte
             <Icon name="arrow" />
@@ -1670,19 +1782,16 @@ function DevicesPage({
               value={editing.model}
               set={(value) => setEditing({ ...editing, model: value })}
             />
-            <label className="field">
-              Mode de connexion
-              <select
-                value={editing.protocol}
-                onChange={(event) =>
-                  setEditing({ ...editing, protocol: event.target.value })
-                }
-              >
-                <option value="standalone">Standalone TCP/IP</option>
-                <option value="adms">PUSH / ADMS</option>
-                <option value="biotime">API ZKBio Time</option>
-              </select>
-            </label>
+            <SelectField
+              label="Mode de connexion"
+              value={editing.protocol}
+              set={(value) => setEditing({ ...editing, protocol: value })}
+              hint="Adaptateur utilisé pour dialoguer avec la pointeuse"
+            >
+              <option value="standalone">Standalone TCP/IP</option>
+              <option value="adms">PUSH / ADMS</option>
+              <option value="biotime">API ZKBio Time</option>
+            </SelectField>
             <TextField
               label="Adresse IP / hôte"
               value={editing.host}
@@ -1737,10 +1846,11 @@ function DevicesPage({
                 <strong>Lier un salarié</strong>
                 <small>ID numérique, sans zéro initial.</small>
               </div>
-              <select
+              <SelectField
+                label="Salarié"
                 value={linkEmployee}
-                onChange={(event) => setLinkEmployee(event.target.value)}
-                required
+                set={setLinkEmployee}
+                compact
               >
                 <option value="">Choisir…</option>
                 {employees.map((employee) => (
@@ -1748,12 +1858,13 @@ function DevicesPage({
                     {employee.firstName} {employee.lastName}
                   </option>
                 ))}
-              </select>
-              <input
+              </SelectField>
+              <TextField
+                label="ID pointeuse"
                 value={deviceUserID}
-                onChange={(event) => setDeviceUserID(event.target.value)}
+                set={setDeviceUserID}
                 placeholder="ID ZKTeco"
-                required
+                compact
               />
               <button
                 type="button"
@@ -1922,20 +2033,19 @@ function PeriodDialog({
           set={setPeriod}
           type="month"
         />
-        <label className="field">
-          Reprendre les salaires de
-          <select
-            value={source}
-            onChange={(event) => setSource(event.target.value)}
-          >
-            <option value="">Aucun mois · valeurs du référentiel</option>
-            {periods.map((item) => (
-              <option key={item.period} value={item.period}>
-                {item.period}
-              </option>
-            ))}
-          </select>
-        </label>
+        <SelectField
+          label="Reprendre les salaires de"
+          value={source}
+          set={setSource}
+          required={false}
+        >
+          <option value="">Aucun mois · valeurs du référentiel</option>
+          {periods.map((item) => (
+            <option key={item.period} value={item.period}>
+              {item.period}
+            </option>
+          ))}
+        </SelectField>
         <div className="banner mini">
           <Icon name="check" />
           <div>
@@ -2009,6 +2119,9 @@ function TextField({
   type = "text",
   autoComplete,
   readOnly = false,
+  hint,
+  compact = false,
+  required = true,
 }: {
   label: string;
   value: string;
@@ -2017,20 +2130,116 @@ function TextField({
   type?: string;
   autoComplete?: string;
   readOnly?: boolean;
+  hint?: string;
+  compact?: boolean;
+  required?: boolean;
 }) {
+  const id = useId();
   return (
-    <label className="field">
-      {label}
-      <input
-        type={type}
-        value={value}
-        onChange={(event) => set(event.target.value)}
-        placeholder={placeholder}
-        autoComplete={autoComplete}
-        readOnly={readOnly}
-        required
-      />
+    <label
+      className={`field pm-control ${compact ? "compact-control" : ""}`}
+      htmlFor={id}
+    >
+      <span className="control-label">
+        {label}
+        {hint && <small>{hint}</small>}
+      </span>
+      <span className="control-shell">
+        <input
+          id={id}
+          type={type}
+          value={value}
+          onChange={(event) => set(event.target.value)}
+          placeholder={placeholder}
+          autoComplete={autoComplete}
+          readOnly={readOnly}
+          required={required}
+        />
+        <span className="control-stamp" aria-hidden="true">
+          {readOnly ? "LIÉ" : type === "month" ? "MOIS" : "PM"}
+        </span>
+      </span>
     </label>
+  );
+}
+
+function SelectField({
+  label,
+  value,
+  set,
+  children,
+  hint,
+  compact = false,
+  required = true,
+}: {
+  label: string;
+  value: string;
+  set: (value: string) => void;
+  children: ReactNode;
+  hint?: string;
+  compact?: boolean;
+  required?: boolean;
+}) {
+  const id = useId();
+  return (
+    <label
+      className={`field pm-control select-control ${compact ? "compact-control" : ""}`}
+      htmlFor={id}
+    >
+      <span className="control-label">
+        {label}
+        {hint && <small>{hint}</small>}
+      </span>
+      <span className="control-shell">
+        <select
+          id={id}
+          value={value}
+          onChange={(event) => set(event.target.value)}
+          required={required}
+        >
+          {children}
+        </select>
+        <span className="select-glyph" aria-hidden="true">
+          <i />
+        </span>
+      </span>
+    </label>
+  );
+}
+
+function SearchField({
+  value,
+  set,
+}: {
+  value: string;
+  set: (value: string) => void;
+}) {
+  const id = useId();
+  return (
+    <div className="search-control" role="search">
+      <label className="visually-hidden" htmlFor={id}>
+        Rechercher un salarié
+      </label>
+      <Icon name="search" />
+      <span>
+        <small>RECHERCHE</small>
+        <input
+          id={id}
+          value={value}
+          onChange={(event) => set(event.target.value)}
+          placeholder="Nom, CIN ou CNSS"
+        />
+      </span>
+      {value && (
+        <button
+          type="button"
+          onClick={() => set("")}
+          aria-label="Effacer la recherche"
+        >
+          ×
+        </button>
+      )}
+    </div>
   );
 }
 function DialogHead({
@@ -2110,13 +2319,44 @@ function EmptyState() {
     </section>
   );
 }
-function Brand({ light = false }: { light?: boolean }) {
+function LogoMark({
+  compact = false,
+  animated = false,
+}: {
+  compact?: boolean;
+  animated?: boolean;
+}) {
+  return (
+    <svg
+      className={`logo-mark ${compact ? "compact" : ""} ${animated ? "animated" : ""}`}
+      viewBox="0 0 48 48"
+      role="img"
+      aria-label="Symbole PaieMaroc : bulletin de paie contrôlé"
+    >
+      <path className="logo-sheet" d="M10 5h20l8 8v30H10z" />
+      <path className="logo-fold" d="M30 5v9h8" />
+      <path className="logo-row row-one" d="M16 19h16" />
+      <path className="logo-row row-two" d="M16 25h10" />
+      <circle className="logo-seal" cx="30" cy="32" r="8" />
+      <path className="logo-check" d="m26.5 32 2.3 2.4 4.8-5.1" />
+      <path className="logo-spine" d="M10 11v26" />
+    </svg>
+  );
+}
+
+function Brand({
+  light = false,
+  wordsOnly = false,
+}: {
+  light?: boolean;
+  wordsOnly?: boolean;
+}) {
   return (
     <div className={`brand ${light ? "light" : ""}`}>
-      <b>M</b>
+      {!wordsOnly && <LogoMark />}
       <span>
         <strong>PaieMaroc</strong>
-        <small>PAIE · CNSS · RH</small>
+        <small>PAIE · CNSS · VIREMENTS</small>
       </span>
     </div>
   );

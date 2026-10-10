@@ -1,99 +1,297 @@
 <!doctype html>
 <html lang="fr">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="PaieMaroc, l’application de bureau libre pour préparer la paie, les déclarations CNSS et les virements de masse au Maroc.">
-  <meta name="theme-color" content="#123c34">
-  <meta property="og:title" content="PaieMaroc — la paie marocaine, simplement">
-  <meta property="og:description" content="Une application locale, rapide et guidée pour les responsables RH.">
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="https://kmoz000.github.io/PaieMaroc/">
-  <title>PaieMaroc — Paie, CNSS et virements</title>
-  <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Newsreader:opsz,wght@6..72,500;6..72,600&amp;display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
-  <script src="app.js" defer></script>
-</head>
-<body>
-  <a class="skip" href="#contenu">Aller au contenu</a>
-  <header class="nav">
-    <a class="logo" href="#"><span>M</span><strong>PaieMaroc</strong></a>
-    <nav aria-label="Navigation principale">
-      <a href="#fonctionnalites">Fonctionnalités</a>
-      <a href="#confiance">Confiance</a>
-      <a href="https://github.com/kmoz000/PaieMaroc">Code source</a>
-    </nav>
-    <a class="nav-download" href="#telecharger">Télécharger</a>
-  </header>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="PaieMaroc, l’application de bureau libre pour préparer la paie, les déclarations CNSS et les virements de masse au Maroc."
+    />
+    <meta name="theme-color" content="#123c34" />
+    <meta
+      property="og:title"
+      content="PaieMaroc — la paie marocaine, simplement"
+    />
+    <meta
+      property="og:description"
+      content="Une application locale, rapide et guidée pour les responsables RH."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://kmoz000.github.io/PaieMaroc/" />
+    <title>PaieMaroc — Paie, CNSS et virements</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Newsreader:opsz,wght@6..72,500;6..72,600&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip" href="#contenu">Aller au contenu</a>
+    <header class="nav">
+      <a class="logo" href="#"><span>M</span><strong>PaieMaroc</strong></a>
+      <nav aria-label="Navigation principale">
+        <a href="#fonctionnalites">Fonctionnalités</a>
+        <a href="#confiance">Confiance</a>
+        <a href="https://github.com/kmoz000/PaieMaroc">Code source</a>
+      </nav>
+      <a class="nav-download" href="#telecharger">Télécharger</a>
+    </header>
 
-  <main id="contenu">
-    <section class="hero">
-      <div class="ornament" aria-hidden="true"></div>
-      <div class="hero-copy">
-        <div class="eyebrow"><i></i> Gratuit, libre et stocké localement</div>
-        <h1>La paie<br>marocaine.<br><em>Claire, enfin.</em></h1>
-        <p>Préparez la paie, contrôlez vos données CNSS et générez vos remises bancaires dans un parcours guidé, conçu pour les équipes RH au Maroc.</p>
-        <div class="actions">
-          <a class="primary" id="smart-download" href="https://github.com/kmoz000/PaieMaroc/releases/latest">Télécharger gratuitement <span>↓</span></a>
-          <a class="secondary" href="https://github.com/kmoz000/PaieMaroc">Voir sur GitHub ↗</a>
-        </div>
-        <div class="trustline"><span>✓ Sans abonnement</span><span>✓ Données privées</span><span>✓ Windows · macOS · Linux</span></div>
-      </div>
-
-      <div class="app-stage" aria-label="Aperçu de l’application PaieMaroc">
-        <div class="glow"></div>
-        <div class="app-window">
-          <div class="titlebar"><span><i></i><i></i><i></i></span><b>PaieMaroc</b><em>Octobre 2026</em></div>
-          <div class="app-body">
-            <aside><div class="mini-logo">M</div><span class="active">⌁</span><span>♙</span><span>▣</span><span>◇</span></aside>
-            <section class="screen">
-              <div class="screen-top"><small>PAIE MENSUELLE</small><b>Bonjour, Karim.</b><p>Votre paie est presque prête.</p></div>
-              <div class="rule"><i>✓</i><span><b>Règles Maroc 2026 chargées</b><small>Barème IR et cotisations versionnés</small></span></div>
-              <div class="stats"><article><small>NET À PAYER</small><b>364 820,00</b><em>MAD</em></article><article><small>COLLABORATEURS</small><b>48</b><em>actifs</em></article><article><small>CONTRÔLE</small><b>92%</b><em>prêt</em></article></div>
-              <div class="employees"><header><b>Préparation de la paie</b><span>Rechercher…</span></header>
-                <div class="row"><i>LB</i><span><b>Lina Benjelloun</b><small>CNSS 168764721</small></span><strong>11 248,00 MAD</strong><em>Prêt</em></div>
-                <div class="row"><i>YE</i><span><b>Yassine El Mansouri</b><small>CNSS 123456789</small></span><strong>7 925,00 MAD</strong><em>Prêt</em></div>
-                <div class="row"><i>SA</i><span><b>Salma Alaoui</b><small>CNSS 987654321</small></span><strong>6 804,00 MAD</strong><em>Prêt</em></div>
-              </div>
-            </section>
+    <main id="contenu">
+      <section class="hero">
+        <div class="ornament" aria-hidden="true"></div>
+        <div class="hero-copy">
+          <div class="eyebrow"><i></i> Gratuit, libre et stocké localement</div>
+          <h1>La paie<br />marocaine.<br /><em>Claire, enfin.</em></h1>
+          <p>
+            Préparez la paie, contrôlez vos données CNSS et générez vos remises
+            bancaires dans un parcours guidé, conçu pour les équipes RH au
+            Maroc.
+          </p>
+          <div class="actions">
+            <a
+              class="primary"
+              id="smart-download"
+              href="https://github.com/kmoz000/PaieMaroc/releases/latest"
+              >Télécharger gratuitement <span>↓</span></a
+            >
+            <a class="secondary" href="https://github.com/kmoz000/PaieMaroc"
+              >Voir sur GitHub ↗</a
+            >
+          </div>
+          <div class="trustline">
+            <span>✓ Sans abonnement</span><span>✓ Données privées</span
+            ><span>✓ Windows signé · macOS notarisé</span>
           </div>
         </div>
-        <div class="float-card cnss"><i>✓</i><span><small>DÉCLARATION CNSS</small><b>BDS contrôlé</b></span></div>
-        <div class="float-card bank"><i>↗</i><span><small>REMISE BANCAIRE</small><b>48 virements prêts</b></span></div>
-      </div>
-    </section>
 
-    <section class="logos"><p>Des formats adaptés aux échanges marocains</p><div><span>CNSS <small>e-BDS</small></span><span>SIMT <small>500</small></span><span>ISO <small>20022</small></span><span>CSV <small>universel</small></span></div></section>
+        <div class="app-stage" aria-label="Aperçu de l’application PaieMaroc">
+          <div class="glow"></div>
+          <div class="app-window">
+            <div class="titlebar">
+              <span><i></i><i></i><i></i></span><b>PaieMaroc</b
+              ><em>Octobre 2026</em>
+            </div>
+            <div class="app-body">
+              <aside>
+                <div class="mini-logo">M</div>
+                <span class="active">⌁</span><span>♙</span><span>▣</span
+                ><span>◇</span>
+              </aside>
+              <section class="screen">
+                <div class="screen-top">
+                  <small>PAIE MENSUELLE</small><b>Bonjour, Karim.</b>
+                  <p>Votre paie est presque prête.</p>
+                </div>
+                <div class="rule">
+                  <i>✓</i
+                  ><span
+                    ><b>Règles Maroc 2026 chargées</b
+                    ><small>Barème IR et cotisations versionnés</small></span
+                  >
+                </div>
+                <div class="stats">
+                  <article>
+                    <small>NET À PAYER</small><b>364 820,00</b><em>MAD</em>
+                  </article>
+                  <article>
+                    <small>COLLABORATEURS</small><b>48</b><em>actifs</em>
+                  </article>
+                  <article>
+                    <small>CONTRÔLE</small><b>92%</b><em>prêt</em>
+                  </article>
+                </div>
+                <div class="employees">
+                  <header>
+                    <b>Préparation de la paie</b><span>Rechercher…</span>
+                  </header>
+                  <div class="row">
+                    <i>LB</i
+                    ><span
+                      ><b>Lina Benjelloun</b><small>CNSS 168764721</small></span
+                    ><strong>11 248,00 MAD</strong><em>Prêt</em>
+                  </div>
+                  <div class="row">
+                    <i>YE</i
+                    ><span
+                      ><b>Yassine El Mansouri</b
+                      ><small>CNSS 123456789</small></span
+                    ><strong>7 925,00 MAD</strong><em>Prêt</em>
+                  </div>
+                  <div class="row">
+                    <i>SA</i
+                    ><span
+                      ><b>Salma Alaoui</b><small>CNSS 987654321</small></span
+                    ><strong>6 804,00 MAD</strong><em>Prêt</em>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+          <div class="float-card cnss">
+            <i>✓</i
+            ><span><small>DÉCLARATION CNSS</small><b>BDS contrôlé</b></span>
+          </div>
+          <div class="float-card bank">
+            <i>↗</i
+            ><span
+              ><small>REMISE BANCAIRE</small><b>48 virements prêts</b></span
+            >
+          </div>
+        </div>
+      </section>
 
-    <section class="features" id="fonctionnalites">
-      <div class="section-head"><small>DE LA SAISIE AU VIREMENT</small><h2>Un chemin sûr à chaque étape.</h2><p>Les contrôles restent visibles. Les erreurs sont expliquées avant qu’un fichier ne quitte votre ordinateur.</p></div>
-      <div class="feature-grid">
-        <article class="wide"><div><span class="number">01</span><h3>Importez sans attendre</h3><p>Chargez un CSV de quelques lignes ou d’un million. L’import par lots et la pagination gardent l’application fluide.</p><ul><li>SQLite locale en mode WAL</li><li>Mémoire bornée et calculs en flux</li><li>Montants exacts en centimes</li></ul></div><div class="import-visual"><span class="file">CSV</span><i></i><section><b>Import terminé</b><strong>1 000 000</strong><small>lignes contrôlées</small><em><u></u></em></section></div></article>
-        <article><span class="number">02</span><div class="icon coral">⌁</div><h3>Calculez avec clarté</h3><p>Brut, cotisations, IR et net sont détaillés avec la version des règles appliquées.</p></article>
-        <article><span class="number">03</span><div class="icon green">✓</div><h3>Préparez la CNSS</h3><p>Salariés préétablis, nouveaux entrants, sorties et sommes de contrôle e-BDS.</p></article>
-        <article><span class="number">04</span><div class="icon gold">↗</div><h3>Payez en masse</h3><p>CSV, SIMT500 segmenté et ISO 20022, avec total avant export.</p></article>
-      </div>
-    </section>
+      <section class="logos">
+        <p>Des formats adaptés aux échanges marocains</p>
+        <div>
+          <span>CNSS <small>e-BDS</small></span
+          ><span>SIMT <small>500</small></span
+          ><span>ISO <small>20022</small></span
+          ><span>CSV <small>universel</small></span>
+        </div>
+      </section>
 
-    <section class="privacy" id="confiance">
-      <div><small>VOS DONNÉES RESTENT CHEZ VOUS</small><h2>Conçu local d’abord.<br><em>Rapide par nature.</em></h2><p>PaieMaroc ne requiert aucun compte en ligne ni serveur distant. La base et les comptes d’équipe sont locaux; les gros fichiers sont traités ligne par ligne.</p><div class="privacy-points"><span><i>⌂</i><b>Stockage local</b><small>Aucun envoi automatique</small></span><span><i>⚡</i><b>Million+ de lignes</b><small>Flux et pagination bornée</small></span><span><i>♢</i><b>Code ouvert</b><small>Auditable sur GitHub</small></span></div></div>
-      <div class="shield"><div><span>M</span><i></i></div><p>Votre paie<br><b>reste privée</b></p></div>
-    </section>
+      <section class="features" id="fonctionnalites">
+        <div class="section-head">
+          <small>DE LA SAISIE AU VIREMENT</small>
+          <h2>Un chemin sûr à chaque étape.</h2>
+          <p>
+            Les contrôles restent visibles. Les erreurs sont expliquées avant
+            qu’un fichier ne quitte votre ordinateur.
+          </p>
+        </div>
+        <div class="feature-grid">
+          <article class="wide">
+            <div>
+              <span class="number">01</span>
+              <h3>Importez sans attendre</h3>
+              <p>
+                Chargez un CSV de quelques lignes ou d’un million. L’import par
+                lots et la pagination gardent l’application fluide.
+              </p>
+              <ul>
+                <li>SQLite locale en mode WAL</li>
+                <li>Mémoire bornée et calculs en flux</li>
+                <li>Montants exacts en centimes</li>
+              </ul>
+            </div>
+            <div class="import-visual">
+              <span class="file">CSV</span><i></i>
+              <section>
+                <b>Import terminé</b><strong>1 000 000</strong
+                ><small>lignes contrôlées</small><em><u></u></em>
+              </section>
+            </div>
+          </article>
+          <article>
+            <span class="number">02</span>
+            <div class="icon coral">⌁</div>
+            <h3>Calculez avec clarté</h3>
+            <p>
+              Brut, cotisations, IR et net sont détaillés avec la version des
+              règles appliquées.
+            </p>
+          </article>
+          <article>
+            <span class="number">03</span>
+            <div class="icon green">✓</div>
+            <h3>Préparez la CNSS</h3>
+            <p>
+              Salariés préétablis, nouveaux entrants, sorties et sommes de
+              contrôle e-BDS.
+            </p>
+          </article>
+          <article>
+            <span class="number">04</span>
+            <div class="icon gold">↗</div>
+            <h3>Payez en masse</h3>
+            <p>CSV, SIMT500 segmenté et ISO 20022, avec total avant export.</p>
+          </article>
+        </div>
+      </section>
 
-    <section class="download" id="telecharger">
-      <div class="download-copy"><small>PRÊT À SIMPLIFIER VOTRE PAIE ?</small><h2>Téléchargez PaieMaroc.</h2><p>Gratuit et open source. Choisissez votre système.</p><span id="release-status">Recherche de la dernière version…</span></div>
-      <div class="download-grid">
-        <a data-platform="Windows" href="https://github.com/kmoz000/PaieMaroc/releases/latest"><i>⊞</i><span><b>Windows</b><small>Windows 10/11 · x64</small></span><em>↓</em></a>
-        <a data-platform="macOS" href="https://github.com/kmoz000/PaieMaroc/releases/latest"><i>⌘</i><span><b>macOS</b><small>Apple Silicon + Intel</small></span><em>↓</em></a>
-        <a data-platform="Linux" href="https://github.com/kmoz000/PaieMaroc/releases/latest"><i>◆</i><span><b>Linux</b><small>Ubuntu/Debian · x64</small></span><em>↓</em></a>
-      </div>
-      <p class="signature">Les paquets officiels signés portent la mention <b>SIGNED</b>. Vérifiez toujours `SHA256SUMS.txt` sur la page de version.</p>
-    </section>
-  </main>
+      <section class="privacy" id="confiance">
+        <div>
+          <small>VOS DONNÉES RESTENT CHEZ VOUS</small>
+          <h2>Conçu local d’abord.<br /><em>Rapide par nature.</em></h2>
+          <p>
+            PaieMaroc ne requiert aucun compte en ligne ni serveur distant. La
+            base et les comptes d’équipe sont locaux; les gros fichiers sont
+            traités ligne par ligne.
+          </p>
+          <div class="privacy-points">
+            <span
+              ><i>⌂</i><b>Stockage local</b
+              ><small>Aucun envoi automatique</small></span
+            ><span
+              ><i>⚡</i><b>Million+ de lignes</b
+              ><small>Flux et pagination bornée</small></span
+            ><span
+              ><i>♢</i><b>Code ouvert</b
+              ><small>Auditable sur GitHub</small></span
+            >
+          </div>
+        </div>
+        <div class="shield">
+          <div><span>M</span><i></i></div>
+          <p>Votre paie<br /><b>reste privée</b></p>
+        </div>
+      </section>
 
-  <footer><a class="logo" href="#"><span>M</span><strong>PaieMaroc</strong></a><p>Fait au Maroc pour les équipes RH. Logiciel libre sous licence MIT.</p><nav><a href="https://github.com/kmoz000/PaieMaroc/releases">Versions</a><a href="https://github.com/kmoz000/PaieMaroc/issues">Support</a><a href="https://github.com/kmoz000/PaieMaroc/blob/main/LICENSE">Licence</a></nav></footer>
-</body>
+      <section class="download" id="telecharger">
+        <div class="download-copy">
+          <small>PRÊT À SIMPLIFIER VOTRE PAIE ?</small>
+          <h2>Téléchargez PaieMaroc.</h2>
+          <p>Gratuit et open source. Choisissez votre système.</p>
+          <span id="release-status">Recherche de la dernière version…</span>
+        </div>
+        <div class="download-grid">
+          <a
+            data-platform="Windows"
+            href="https://github.com/kmoz000/PaieMaroc/releases/latest"
+            ><i>⊞</i
+            ><span
+              ><b>Windows</b
+              ><small>Installateur signé · Windows 10/11</small></span
+            ><em>↓</em></a
+          >
+          <a
+            data-platform="macOS"
+            href="https://github.com/kmoz000/PaieMaroc/releases/latest"
+            ><i>⌘</i
+            ><span
+              ><b>macOS</b
+              ><small>DMG notarisé · Apple Silicon + Intel</small></span
+            ><em>↓</em></a
+          >
+          <a
+            data-platform="Linux"
+            href="https://github.com/kmoz000/PaieMaroc/releases/latest"
+            ><i>◆</i><span><b>Linux</b><small>Ubuntu/Debian · x64</small></span
+            ><em>↓</em></a
+          >
+        </div>
+        <p class="signature">
+          Les paquets officiels signés portent la mention <b>SIGNED</b>.
+          Vérifiez toujours `SHA256SUMS.txt` sur la page de version.
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <a class="logo" href="#"><span>M</span><strong>PaieMaroc</strong></a>
+      <p>Fait au Maroc pour les équipes RH. Logiciel libre sous licence MIT.</p>
+      <nav>
+        <a href="https://github.com/kmoz000/PaieMaroc/releases">Versions</a
+        ><a href="https://github.com/kmoz000/PaieMaroc/issues">Support</a
+        ><a href="https://github.com/kmoz000/PaieMaroc/blob/main/LICENSE"
+          >Licence</a
+        >
+      </nav>
+    </footer>
+  </body>
 </html>
