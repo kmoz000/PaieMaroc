@@ -32,6 +32,12 @@ jobs:
       - name: Compiler le frontend
         run: npm run build
         working-directory: paie-maroc/frontend
+      - name: Tester les parcours frontend
+        run: npm test
+        working-directory: paie-maroc/frontend
+      - name: Auditer les dépendances frontend
+        run: npm audit --audit-level=moderate
+        working-directory: paie-maroc/frontend
       - name: Vérifier le format Go
         run: test -z "$(gofmt -l .)"
       - name: Analyser le code Go

@@ -98,6 +98,9 @@ jobs:
       - name: Installer le frontend
         run: npm ci
         working-directory: paie-maroc/frontend
+      - name: Tester le frontend
+        run: npm test
+        working-directory: paie-maroc/frontend
       - name: Tester avant emballage
         run: go test ./...
 

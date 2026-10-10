@@ -14,8 +14,9 @@ const (
 )
 
 var (
-	digitsOnly = regexp.MustCompile(`^[0-9]+$`)
-	validCIN   = regexp.MustCompile(`^[A-Z]{1,2}[0-9]{3,8}$`)
+	digitsOnly      = regexp.MustCompile(`^[0-9]+$`)
+	validEmployeeID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]{0,31}$`)
+	validCIN        = regexp.MustCompile(`^[A-Z]{1,2}[0-9]{3,8}$`)
 )
 
 // Employee is the validated monthly payroll input. Monetary values are centimes.
@@ -80,8 +81,8 @@ func Validate(employee Employee) []ValidationIssue {
 		})
 	}
 
-	if strings.TrimSpace(employee.ID) == "" {
-		add("id", "Le matricule interne est obligatoire.")
+	if !validEmployeeID.MatchString(strings.TrimSpace(employee.ID)) {
+		add("id", "Utilisez 1 à 32 caractères : lettres, chiffres, point, tiret, barre ou soulignement.")
 	}
 	if strings.TrimSpace(employee.FirstName) == "" {
 		add("firstName", "Le prénom est obligatoire.")

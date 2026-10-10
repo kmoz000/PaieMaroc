@@ -73,6 +73,26 @@ func TestValidate(t *testing.T) {
 		wantField string
 	}{
 		{
+			name:      "invalid employee id",
+			mutate:    func(employee *payroll.Employee) { employee.ID = "EMP 001!" },
+			wantField: "id",
+		},
+		{
+			name:      "missing first name",
+			mutate:    func(employee *payroll.Employee) { employee.FirstName = " " },
+			wantField: "firstName",
+		},
+		{
+			name:      "invalid CIN",
+			mutate:    func(employee *payroll.Employee) { employee.CIN = "123" },
+			wantField: "cin",
+		},
+		{
+			name:      "invalid CNSS length",
+			mutate:    func(employee *payroll.Employee) { employee.CNSS = "123" },
+			wantField: "cnss",
+		},
+		{
 			name:      "invalid RIB length",
 			mutate:    func(employee *payroll.Employee) { employee.RIB = "123" },
 			wantField: "rib",
@@ -83,9 +103,24 @@ func TestValidate(t *testing.T) {
 			wantField: "daysWorked",
 		},
 		{
+			name:      "too many dependants",
+			mutate:    func(employee *payroll.Employee) { employee.Dependants = 7 },
+			wantField: "dependants",
+		},
+		{
+			name:      "zero gross amount",
+			mutate:    func(employee *payroll.Employee) { employee.GrossCentimes = 0 },
+			wantField: "grossCentimes",
+		},
+		{
 			name:      "negative exempt amount",
 			mutate:    func(employee *payroll.Employee) { employee.ExemptCentimes = -1 },
 			wantField: "exemptCentimes",
+		},
+		{
+			name:      "negative advance amount",
+			mutate:    func(employee *payroll.Employee) { employee.AdvanceCentimes = -1 },
+			wantField: "advanceCentimes",
 		},
 	}
 

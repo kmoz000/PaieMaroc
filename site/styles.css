@@ -62,6 +62,10 @@ body {
   object-fit: contain;
   border-radius: 6px;
 }
+.logo-light img {
+  width: 52px;
+  height: 52px;
+}
 .nav nav {
   margin: auto;
   display: flex;
@@ -222,17 +226,14 @@ body {
   background: #10263c;
 }
 .mini-logo {
-  width: 34px;
-  height: 34px;
-  padding: 2px;
-  display: grid;
-  place-items: center;
-  border-radius: 6px;
-  background: #fff;
-}
-.mini-logo img {
   width: 30px;
   height: 30px;
+  display: grid;
+  place-items: center;
+}
+.mini-logo img {
+  width: 28px;
+  height: 28px;
   object-fit: contain;
 }
 .app-body aside span {
@@ -699,19 +700,15 @@ body {
   position: relative;
 }
 .shield > div {
-  width: 190px;
-  height: 190px;
-  padding: 10px;
+  width: 160px;
+  height: 160px;
   z-index: 1;
   display: grid;
   place-items: center;
-  border-radius: 18px;
-  background: #fff;
-  box-shadow: 0 26px 55px #001f3e66;
 }
 .shield > div img {
-  width: 170px;
-  height: 170px;
+  width: 150px;
+  height: 150px;
   object-fit: contain;
 }
 .shield > p {

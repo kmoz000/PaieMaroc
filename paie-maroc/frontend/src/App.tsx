@@ -34,6 +34,7 @@ import {
   WindowToggleMaximise,
 } from "../wailsjs/runtime/runtime";
 import brandLogo from "./assets/paie-maroc-hr-logo.png";
+import whiteBrandLogo from "./assets/paie-maroc-hr-logo-white.png";
 import "./App.css";
 
 type User = {
@@ -63,6 +64,11 @@ type Employee = {
   exemptCentimes: number;
   advanceCentimes: number;
 };
+type EmployeeIssue = {
+  field: keyof Employee;
+  message: string;
+};
+type EmployeeErrors = Partial<Record<keyof Employee, string>>;
 type Row = {
   employee: Employee;
   employeeCnss: number;
@@ -114,6 +120,12 @@ type Route =
 
 const isNative = Boolean((window as unknown as { go?: unknown }).go);
 const isMac = /Mac/i.test(navigator.platform);
+const employeePatterns = {
+  id: "[A-Za-z0-9][A-Za-z0-9._/-]{0,31}",
+  cin: "[A-Z]{1,2}[0-9]{3,8}",
+  cnss: "[0-9]{6,12}",
+  rib: "[0-9]{24}",
+} as const;
 const demoEmployees: Employee[] = [
   {
     id: "AT-0018",
@@ -155,6 +167,73 @@ const demoEmployees: Employee[] = [
     advanceCentimes: 0,
   },
 ];
+
+export function validateEmployee(employee: Employee): EmployeeIssue[] {
+  const issues: EmployeeIssue[] = [];
+  const add = (field: keyof Employee, message: string) =>
+    issues.push({ field, message });
+  const digits = (value: string) => value.replace(/[^0-9]/g, "");
+
+  if (!new RegExp(`^${employeePatterns.id}$`).test(employee.id.trim()))
+    add(
+      "id",
+      "Utilisez 1 à 32 caractères : lettres, chiffres, point, tiret, barre ou soulignement.",
+    );
+  if (!employee.firstName.trim())
+    add("firstName", "Le prénom est obligatoire.");
+  if (!employee.lastName.trim()) add("lastName", "Le nom est obligatoire.");
+  if (
+    !new RegExp(`^${employeePatterns.cin}$`).test(
+      employee.cin.replaceAll(" ", ""),
+    )
+  )
+    add("cin", "Le CIN doit contenir 1 à 2 lettres puis 3 à 8 chiffres.");
+  if (digits(employee.cnss).length < 6 || digits(employee.cnss).length > 12)
+    add("cnss", "Le numéro CNSS doit contenir 6 à 12 chiffres.");
+  if (digits(employee.rib).length !== 24)
+    add("rib", "Le RIB marocain doit contenir exactement 24 chiffres.");
+  if (employee.daysWorked < 0 || employee.daysWorked > 30)
+    add(
+      "daysWorked",
+      "Les jours travaillés doivent être compris entre 0 et 30.",
+    );
+  if (employee.dependants < 0 || employee.dependants > 6)
+    add(
+      "dependants",
+      "Les personnes à charge doivent être comprises entre 0 et 6.",
+    );
+  if (
+    !Number.isSafeInteger(employee.grossCentimes) ||
+    employee.grossCentimes <= 0
+  )
+    add("grossCentimes", "Le salaire brut doit être supérieur à zéro.");
+  if (
+    !Number.isSafeInteger(employee.exemptCentimes) ||
+    employee.exemptCentimes < 0
+  )
+    add("exemptCentimes", "Le montant exonéré ne peut pas être négatif.");
+  if (
+    !Number.isSafeInteger(employee.advanceCentimes) ||
+    employee.advanceCentimes < 0
+  )
+    add("advanceCentimes", "L’avance ne peut pas être négative.");
+  return issues;
+}
+
+export function nextEmployeeID(employees: Employee[]): string {
+  const identifiers = new Set(employees.map((employee) => employee.id));
+  let sequence = 1;
+  while (identifiers.has(`EMP-${String(sequence).padStart(4, "0")}`))
+    sequence++;
+  return `EMP-${String(sequence).padStart(4, "0")}`;
+}
+
+function employeeFieldFromError(message: string): keyof Employee | undefined {
+  const field = message.match(
+    /^(id|firstName|lastName|cin|cnss|rib|daysWorked|dependants|grossCentimes|exemptCentimes|advanceCentimes):/,
+  )?.[1];
+  return field as keyof Employee | undefined;
+}
 const demoUser: User = {
   id: 1,
   username: "admin.paie",
@@ -293,6 +372,12 @@ function Icon({ name, size = 18 }: { name: string; size?: number }) {
       <>
         <circle cx="8" cy="15" r="4" />
         <path d="m11 12 9-9M18 5l2 2M15 8l2 2" />
+      </>
+    ),
+    warning: (
+      <>
+        <path d="M12 3 2.7 20h18.6Z" />
+        <path d="M12 9v4M12 17h.01" />
       </>
     ),
     trash: (
@@ -690,22 +775,42 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
     load().catch((error) => setMessage(friendlyError(error)));
   }, [activePeriod, refresh]);
   async function saveEmployee(employee: Employee) {
-    if (!activePeriod || !canEdit) return;
+    if (!activePeriod || !canEdit) {
+      const reason =
+        "Sélectionnez une période brouillon avant d’ajouter un salarié.";
+      setMessage(reason);
+      throw new Error(reason);
+    }
     try {
+      const alreadyExists = employees.some((item) => item.id === employee.id);
+      const updatedEmployees = alreadyExists
+        ? employees.map((item) => (item.id === employee.id ? employee : item))
+        : [...employees, employee];
       if (isNative) await SavePeriodEmployee(activePeriod, employee as never);
-      setEmployees((current) =>
-        current.some((item) => item.id === employee.id)
-          ? current.map((item) => (item.id === employee.id ? employee : item))
-          : [...current, employee],
-      );
-      await loadPeriods(activePeriod);
-      setRefresh((value) => value + 1);
+      setEmployees(updatedEmployees);
+      if (isNative) {
+        await loadPeriods(activePeriod);
+        setRefresh((value) => value + 1);
+      } else {
+        setBatch(localCalc(updatedEmployees));
+        if (!alreadyExists) {
+          setPeriods((current) =>
+            current.map((item) =>
+              item.period === activePeriod
+                ? { ...item, employeeCount: item.employeeCount + 1 }
+                : item,
+            ),
+          );
+        }
+      }
       setMessage(
         `${employee.firstName} ${employee.lastName} enregistré·e dans ${activePeriod}`,
       );
       setEditing(null);
     } catch (error) {
-      setMessage(friendlyError(error));
+      const reason = friendlyError(error);
+      setMessage(reason);
+      throw new Error(reason);
     }
   }
   async function createPeriod(value: string, copyFrom: string) {
@@ -790,7 +895,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <Brand />
+        <Brand light />
         <nav aria-label="Navigation principale">
           {navSections.map((section) => (
             <section key={section.label}>
@@ -972,7 +1077,7 @@ function PayrollPage({
   function add() {
     if (canEdit)
       edit({
-        id: `EMP-${String(employees.length + 1).padStart(4, "0")}`,
+        id: nextEmployeeID(employees),
         firstName: "",
         lastName: "",
         cin: "",
@@ -1896,17 +2001,69 @@ function EmployeeDialog({
 }: {
   value: Employee;
   close: () => void;
-  save: (value: Employee) => void;
+  save: (value: Employee) => Promise<void>;
 }) {
-  const [employee, setEmployee] = useState(value);
+  const [employee, setEmployee] = useState(value),
+    [error, setError] = useState(""),
+    [errors, setErrors] = useState<EmployeeErrors>({}),
+    [busy, setBusy] = useState(false);
+  const update = (next: Employee, field: keyof Employee) => {
+    setEmployee(next);
+    setErrors((current) => ({ ...current, [field]: undefined }));
+    if (error) setError("");
+  };
+  const focusField = (field: keyof Employee) =>
+    window.requestAnimationFrame(() =>
+      document.querySelector<HTMLInputElement>(`[name="${field}"]`)?.focus(),
+    );
   return (
-    <div className="backdrop" onMouseDown={close}>
+    <div
+      className="backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-label={
+        value.firstName ? "Modifier le salarié" : "Ajouter un salarié"
+      }
+      onMouseDown={close}
+    >
       <form
         className="dialog"
+        noValidate
         onMouseDown={(event) => event.stopPropagation()}
-        onSubmit={(event) => {
+        onSubmit={async (event) => {
           event.preventDefault();
-          save(employee);
+          const issues = validateEmployee(employee);
+          if (issues.length) {
+            setErrors(
+              Object.fromEntries(
+                issues.map((issue) => [issue.field, issue.message]),
+              ) as EmployeeErrors,
+            );
+            setError(
+              issues.length === 1
+                ? issues[0].message
+                : `Corrigez les ${issues.length} champs signalés.`,
+            );
+            focusField(issues[0].field);
+            return;
+          }
+          setBusy(true);
+          try {
+            await save(employee);
+          } catch (reason) {
+            const message = friendlyError(reason);
+            const field = employeeFieldFromError(message);
+            setError(message.replace(/^[^:]+:\s*/, ""));
+            if (field) {
+              setErrors((current) => ({
+                ...current,
+                [field]: message.replace(/^[^:]+:\s*/, ""),
+              }));
+              focusField(field);
+            }
+          } finally {
+            setBusy(false);
+          }
         }}
       >
         <DialogHead
@@ -1920,66 +2077,163 @@ function EmployeeDialog({
         />
         <div className="form-grid two">
           <TextField
+            name="firstName"
             label="Prénom"
             value={employee.firstName}
-            set={(firstName) => setEmployee({ ...employee, firstName })}
+            set={(firstName) => update({ ...employee, firstName }, "firstName")}
+            error={errors.firstName}
           />
           <TextField
+            name="lastName"
             label="Nom"
             value={employee.lastName}
-            set={(lastName) => setEmployee({ ...employee, lastName })}
+            set={(lastName) => update({ ...employee, lastName }, "lastName")}
+            error={errors.lastName}
           />
           <TextField
+            name="id"
             label="Matricule unique"
+            hint="A–Z · 0–9 · . _ / -"
             value={employee.id}
-            set={(id) => setEmployee({ ...employee, id })}
+            set={(id) => update({ ...employee, id: id.toUpperCase() }, "id")}
             readOnly={Boolean(value.firstName)}
+            error={errors.id}
+            pattern={employeePatterns.id}
+            maxLength={32}
           />
           <TextField
+            name="cin"
             label="CIN"
+            hint="Ex. AB123456"
             value={employee.cin}
-            set={(cin) => setEmployee({ ...employee, cin: cin.toUpperCase() })}
+            set={(cin) =>
+              update({ ...employee, cin: cin.toUpperCase() }, "cin")
+            }
+            error={errors.cin}
+            pattern={employeePatterns.cin}
+            maxLength={10}
           />
           <TextField
+            name="cnss"
             label="N° CNSS"
+            hint="6–12 chiffres"
             value={employee.cnss}
-            set={(cnss) => setEmployee({ ...employee, cnss })}
+            set={(cnss) =>
+              update({ ...employee, cnss: cnss.replace(/[^0-9]/g, "") }, "cnss")
+            }
+            error={errors.cnss}
+            pattern={employeePatterns.cnss}
+            maxLength={12}
+            inputMode="numeric"
           />
           <TextField
+            name="daysWorked"
             label="Jours ce mois"
+            hint="0–30"
+            type="number"
             value={String(employee.daysWorked)}
             set={(daysWorked) =>
-              setEmployee({ ...employee, daysWorked: Number(daysWorked) })
+              update(
+                { ...employee, daysWorked: Number(daysWorked) },
+                "daysWorked",
+              )
             }
+            error={errors.daysWorked}
+            min={0}
+            max={30}
+          />
+          <TextField
+            name="dependants"
+            label="Personnes à charge"
+            hint="0–6"
+            type="number"
+            value={String(employee.dependants)}
+            set={(dependants) =>
+              update(
+                { ...employee, dependants: Number(dependants) },
+                "dependants",
+              )
+            }
+            error={errors.dependants}
+            min={0}
+            max={6}
           />
           <div className="span-two">
             <TextField
+              name="rib"
               label="RIB marocain · 24 chiffres"
+              hint="Chiffres uniquement"
               value={employee.rib}
-              set={(rib) => setEmployee({ ...employee, rib })}
+              set={(rib) =>
+                update({ ...employee, rib: rib.replace(/[^0-9]/g, "") }, "rib")
+              }
+              error={errors.rib}
+              pattern={employeePatterns.rib}
+              maxLength={24}
+              inputMode="numeric"
             />
           </div>
           <TextField
+            name="grossCentimes"
             label="Salaire brut ce mois (MAD)"
+            type="number"
             value={String(employee.grossCentimes / 100)}
             set={(value) =>
-              setEmployee({
-                ...employee,
-                grossCentimes: Math.round(Number(value) * 100),
-              })
+              update(
+                {
+                  ...employee,
+                  grossCentimes: Math.round(Number(value) * 100),
+                },
+                "grossCentimes",
+              )
             }
+            error={errors.grossCentimes}
+            min={0.01}
+            step={0.01}
           />
           <TextField
+            name="exemptCentimes"
+            label="Montant exonéré (MAD)"
+            type="number"
+            value={String(employee.exemptCentimes / 100)}
+            set={(value) =>
+              update(
+                {
+                  ...employee,
+                  exemptCentimes: Math.round(Number(value) * 100),
+                },
+                "exemptCentimes",
+              )
+            }
+            error={errors.exemptCentimes}
+            min={0}
+            step={0.01}
+          />
+          <TextField
+            name="advanceCentimes"
             label="Avance ce mois (MAD)"
+            type="number"
             value={String(employee.advanceCentimes / 100)}
             set={(value) =>
-              setEmployee({
-                ...employee,
-                advanceCentimes: Math.round(Number(value) * 100),
-              })
+              update(
+                {
+                  ...employee,
+                  advanceCentimes: Math.round(Number(value) * 100),
+                },
+                "advanceCentimes",
+              )
             }
+            error={errors.advanceCentimes}
+            min={0}
+            step={0.01}
           />
         </div>
+        {error && (
+          <div className="form-error dialog-error" role="alert">
+            <Icon name="warning" size={14} />
+            {error}
+          </div>
+        )}
         <div className="secure-note">
           <Icon name="calendar" />
           <span>
@@ -1991,7 +2245,9 @@ function EmployeeDialog({
           <button type="button" className="button secondary" onClick={close}>
             Annuler
           </button>
-          <button className="button primary">Enregistrer</button>
+          <button className="button primary" disabled={busy}>
+            {busy ? "Enregistrement…" : "Enregistrer"}
+          </button>
         </div>
       </form>
     </div>
@@ -2109,6 +2365,7 @@ function Flow({
   );
 }
 function TextField({
+  name,
   label,
   value,
   set,
@@ -2119,7 +2376,15 @@ function TextField({
   hint,
   compact = false,
   required = true,
+  error,
+  pattern,
+  maxLength,
+  inputMode,
+  min,
+  max,
+  step,
 }: {
+  name?: string;
   label: string;
   value: string;
   set: (value: string) => void;
@@ -2130,11 +2395,27 @@ function TextField({
   hint?: string;
   compact?: boolean;
   required?: boolean;
+  error?: string;
+  pattern?: string;
+  maxLength?: number;
+  inputMode?:
+    | "none"
+    | "text"
+    | "tel"
+    | "url"
+    | "email"
+    | "numeric"
+    | "decimal"
+    | "search";
+  min?: number;
+  max?: number;
+  step?: number;
 }) {
-  const id = useId();
+  const id = useId(),
+    errorID = `${id}-error`;
   return (
     <label
-      className={`field pm-control ${compact ? "compact-control" : ""}`}
+      className={`field pm-control ${compact ? "compact-control" : ""} ${error ? "invalid" : ""}`}
       htmlFor={id}
     >
       <span className="control-label">
@@ -2144,6 +2425,7 @@ function TextField({
       <span className="control-shell">
         <input
           id={id}
+          name={name}
           type={type}
           value={value}
           onChange={(event) => set(event.target.value)}
@@ -2151,11 +2433,24 @@ function TextField({
           autoComplete={autoComplete}
           readOnly={readOnly}
           required={required}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? errorID : undefined}
+          pattern={pattern}
+          maxLength={maxLength}
+          inputMode={inputMode}
+          min={min}
+          max={max}
+          step={step}
         />
         <span className="control-stamp" aria-hidden="true">
           {readOnly ? "LIÉ" : type === "month" ? "MOIS" : "PM"}
         </span>
       </span>
+      {error && (
+        <small className="field-error" id={errorID}>
+          {error}
+        </small>
+      )}
     </label>
   );
 }
@@ -2319,7 +2614,10 @@ function EmptyState() {
 function Brand({ light = false }: { light?: boolean }) {
   return (
     <div className={`brand ${light ? "light" : ""}`}>
-      <img src={brandLogo} alt="PaieMaroc — Gestion des Ressources Humaines" />
+      <img
+        src={light ? whiteBrandLogo : brandLogo}
+        alt="PaieMaroc — Gestion des Ressources Humaines"
+      />
     </div>
   );
 }
