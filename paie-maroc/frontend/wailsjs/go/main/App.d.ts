@@ -19,11 +19,15 @@ export function CreatePeriod(arg1:store.CreatePeriodInput):Promise<store.Period>
 
 export function CreateUser(arg1:auth.CreateInput):Promise<auth.User>;
 
+export function DeleteAttendanceHoliday(arg1:string):Promise<void>;
+
 export function DeleteEmployee(arg1:string):Promise<void>;
 
 export function DeletePeriod(arg1:string):Promise<void>;
 
 export function GenerateCNSSBDS(arg1:string):Promise<main.CNSSResult>;
+
+export function GetAttendanceWorkPolicy():Promise<attendance.WorkPolicy>;
 
 export function GetAuthState():Promise<main.AuthState>;
 
@@ -34,6 +38,12 @@ export function ImportEmployeesCSVToPeriod(arg1:string):Promise<store.ImportStat
 export function LinkAttendanceEmployee(arg1:number,arg2:string,arg3:string):Promise<void>;
 
 export function ListAttendanceDevices():Promise<Array<attendance.Device>>;
+
+export function ListAttendanceHolidays(arg1:string):Promise<Array<attendance.Holiday>>;
+
+export function ListAttendancePunchChanges(arg1:number):Promise<Array<attendance.PunchChange>>;
+
+export function ListAttendancePunches(arg1:attendance.PunchFilter):Promise<attendance.PunchPage>;
 
 export function ListEmployees(arg1:string,arg2:string,arg3:number):Promise<store.Page>;
 
@@ -57,6 +67,14 @@ export function SaveAllEmployeesExport(arg1:main.LargeExportInput):Promise<expor
 
 export function SaveAttendanceDevice(arg1:attendance.Device):Promise<attendance.Device>;
 
+export function SaveAttendanceExport(arg1:main.AttendanceExportInput):Promise<main.AttendanceExportResult>;
+
+export function SaveAttendanceHoliday(arg1:attendance.Holiday):Promise<void>;
+
+export function SaveAttendancePunch(arg1:attendance.PunchInput):Promise<attendance.Punch>;
+
+export function SaveAttendanceWorkPolicy(arg1:attendance.WorkPolicy):Promise<void>;
+
 export function SaveEmployee(arg1:payroll.Employee):Promise<void>;
 
 export function SaveExport(arg1:main.ExportInput):Promise<main.ExportResult>;
@@ -64,6 +82,8 @@ export function SaveExport(arg1:main.ExportInput):Promise<main.ExportResult>;
 export function SavePeriodEmployee(arg1:string,arg2:payroll.Employee):Promise<void>;
 
 export function SetUserEnabled(arg1:number,arg2:boolean):Promise<void>;
+
+export function SyncAttendanceDevice(arg1:number):Promise<attendance.SyncResult>;
 
 export function TestAttendanceDevice(arg1:attendance.Device):Promise<attendance.ProbeResult>;
 

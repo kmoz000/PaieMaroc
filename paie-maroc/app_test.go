@@ -7,10 +7,22 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kmoz000/PaieMaroc/paie-maroc/internal/attendance"
 	"github.com/kmoz000/PaieMaroc/paie-maroc/internal/auth"
 	"github.com/kmoz000/PaieMaroc/paie-maroc/internal/payroll"
 	"github.com/kmoz000/PaieMaroc/paie-maroc/internal/store"
 )
+
+func TestAttendanceExportPreventsSpreadsheetFormulaInjection(t *testing.T) {
+	t.Parallel()
+	row := attendanceExportRow([]string{"employeeName", "note"}, attendance.Punch{
+		EmployeeName: "=WEBSERVICE(\"https://example.invalid\")",
+		Note:         "  @SUM(1+1)",
+	})
+	if row[0][0] != '\'' || row[1][0] != '\'' {
+		t.Fatalf("formula-like cells were not escaped: %#v", row)
+	}
+}
 
 func TestAppEmployeeLifecycleThroughWailsBoundary(t *testing.T) {
 	t.Parallel()

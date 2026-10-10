@@ -8,9 +8,13 @@ Sources vérifiées le 10 octobre 2026 :
 - [Cahier des charges e-BDS CNSS v1.3](https://fr.scribd.com/document/456993223/CNSS-Regles-de-gestion-emission-et-preetabliV7-pdf) : structures A00–A03/B00–B06, longueur 260, contrôles, entrants et clés. Cette copie publique est ancienne; un fichier pilote doit être validé sur Damancom.
 - [Virement de masse — BMCI](https://www.bmci.ma/entreprises/gestion-des-flux/optimiser-tresorerie/virement-de-masse/) : formats bancaires AMB160, SIMT500 et MT101 disponibles au Maroc.
 - [Guide e-corpo — Crédit du Maroc](https://www.creditdumaroc.ma/sites/default/files/ecorpo/GuideUtilisateur.pdf) : prise en charge annoncée des fichiers SIMT, AMB160 et SICPA.
-- [MB10-VL — ZKTeco](https://www.zkteco.com/en/HybridBiometric4ZM/MB10-VL) : capacités officielles, TCP/IP, ADMS, visage, empreinte, 50 000 transactions et compatibilité BioTime 8.0.
+- [Code du travail — Ministère de la Justice](https://adala.justice.gov.ma/api/uploads/2024/04/30/code%20du%20travail-1714463246806.pdf) : articles 184 et 196–201 pour la durée normale et les heures supplémentaires; articles 217–227 pour les jours fériés payés. L’article 224 prévoit, lorsque le travail férié est autorisé, une indemnité supplémentaire égale au salaire correspondant, sauf repos compensateur convenu.
+- [MB10-VL — ZKTeco](https://zkteco.com/en/Standalone_Device/MB10-VL) : capacités officielles, TCP/IP, ADMS, visage, empreinte, carte et 50 000 transactions (150 000 en option).
+- [ZKBio Time — ZKTeco](https://www.zkteco.com/en/ZKBioTime/ZKBioTime) : logiciel serveur officiel pour les déploiements PUSH/ADMS; son intégration nécessite l’API et la version effectivement licenciées sur le site client.
 - [Centre SDK — ZKTeco](https://www.zkteco.com/en/SDK) : SDK officiels par famille de matériel; il n’existe pas un pilote public unique couvrant tous les firmwares.
 
 Les taux sociaux combinés utilisés sont versionnés dans `internal/payroll/payroll.go`. Le format exact d’une remise dépend du contrat de télétransmission de la banque : l’application exige donc une validation bancaire avant le premier envoi réel. Une validation réussie dans PaieMaroc ne remplace ni l’accusé de contrôle CNSS ni l’acceptation bancaire.
 
 La compatibilité ZKTeco est sélectionnée par protocole et firmware. Le test intégré prouve la joignabilité TCP, pas la synchronisation métier. L’activation complète d’un adaptateur Standalone, PUSH/ADMS ou ZKBio Time doit être validée sur le modèle et le firmware réels.
+
+Le calendrier embarqué matérialise automatiquement les fêtes nationales à date fixe. Les fêtes religieuses ne sont jamais extrapolées : l’administrateur les confirme après publication officielle. Les majorations produisent une proposition contrôlable et ne modifient pas automatiquement le brut mensuel.

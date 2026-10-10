@@ -458,6 +458,72 @@ func (store *Store) prepare() error {
 			FOREIGN KEY(device_id) REFERENCES attendance_devices(id) ON DELETE CASCADE,
 			FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
 		) STRICT`,
+		`CREATE TABLE IF NOT EXISTS attendance_punches (
+			id INTEGER PRIMARY KEY,
+			device_id INTEGER,
+			employee_id TEXT,
+			device_user_id TEXT NOT NULL DEFAULT '',
+			external_id TEXT,
+			occurred_at TEXT NOT NULL,
+			direction TEXT NOT NULL CHECK(direction IN ('entry', 'exit', 'unknown')),
+			verification TEXT NOT NULL CHECK(verification IN ('face', 'fingerprint', 'card', 'password', 'manual', 'other')),
+			source TEXT NOT NULL CHECK(source IN ('device', 'manual')),
+			note TEXT NOT NULL DEFAULT '',
+			edited INTEGER NOT NULL DEFAULT 0 CHECK(edited IN (0, 1)),
+			created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(device_id, external_id),
+			FOREIGN KEY(device_id) REFERENCES attendance_devices(id) ON DELETE SET NULL,
+			FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE SET NULL
+		) STRICT`,
+		`CREATE INDEX IF NOT EXISTS attendance_punches_time_idx ON attendance_punches(occurred_at DESC, id DESC)`,
+		`CREATE INDEX IF NOT EXISTS attendance_punches_employee_time_idx ON attendance_punches(employee_id, occurred_at DESC, id DESC)`,
+		`CREATE INDEX IF NOT EXISTS attendance_punches_device_time_idx ON attendance_punches(device_id, occurred_at DESC, id DESC)`,
+		`CREATE TABLE IF NOT EXISTS attendance_punch_changes (
+			id INTEGER PRIMARY KEY,
+			punch_id INTEGER NOT NULL,
+			action TEXT NOT NULL CHECK(action IN ('create', 'edit')),
+			reason TEXT NOT NULL,
+			changed_by INTEGER NOT NULL,
+			before_json TEXT NOT NULL,
+			after_json TEXT NOT NULL,
+			changed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY(punch_id) REFERENCES attendance_punches(id) ON DELETE CASCADE,
+			FOREIGN KEY(changed_by) REFERENCES users(id) ON DELETE RESTRICT
+		) STRICT`,
+		`CREATE INDEX IF NOT EXISTS attendance_punch_changes_punch_idx ON attendance_punch_changes(punch_id, id DESC)`,
+		`CREATE TABLE IF NOT EXISTS attendance_sync_state (
+			device_id INTEGER PRIMARY KEY,
+			last_synced_at TEXT,
+			last_error TEXT NOT NULL DEFAULT '',
+			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY(device_id) REFERENCES attendance_devices(id) ON DELETE CASCADE
+		) STRICT`,
+		`CREATE TABLE IF NOT EXISTS attendance_holidays (
+			date TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			kind TEXT NOT NULL CHECK(kind IN ('national', 'religious', 'company')),
+			paid INTEGER NOT NULL CHECK(paid IN (0, 1)),
+			premium_basis_points INTEGER NOT NULL CHECK(premium_basis_points BETWEEN 0 AND 50000),
+			status TEXT NOT NULL CHECK(status IN ('confirmed', 'provisional')),
+			source TEXT NOT NULL,
+			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+		) STRICT`,
+		`CREATE TABLE IF NOT EXISTS attendance_work_policy (
+			id INTEGER PRIMARY KEY CHECK(id = 1),
+			sector TEXT NOT NULL CHECK(sector IN ('non_agricultural', 'agricultural')),
+			weekly_minutes INTEGER NOT NULL CHECK(weekly_minutes BETWEEN 1 AND 10080),
+			day_start TEXT NOT NULL,
+			day_end TEXT NOT NULL,
+			break_minutes INTEGER NOT NULL CHECK(break_minutes BETWEEN 0 AND 720),
+			grace_minutes INTEGER NOT NULL CHECK(grace_minutes BETWEEN 0 AND 180),
+			day_premium_basis_points INTEGER NOT NULL,
+			night_premium_basis_points INTEGER NOT NULL,
+			rest_day_premium_basis_points INTEGER NOT NULL,
+			rest_night_premium_basis_points INTEGER NOT NULL,
+			rules_version TEXT NOT NULL,
+			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+		) STRICT`,
 	}
 	for _, statement := range statements {
 		if _, err := store.db.Exec(statement); err != nil {

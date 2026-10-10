@@ -7,12 +7,17 @@ import {
   CreateInitialAdmin,
   CreatePeriod,
   CreateUser,
+  DeleteAttendanceHoliday,
   DeletePeriod,
   GenerateCNSSBDS,
+  GetAttendanceWorkPolicy,
   GetAuthState,
   ImportEmployeesCSVToPeriod,
   LinkAttendanceEmployee,
   ListAttendanceDevices,
+  ListAttendanceHolidays,
+  ListAttendancePunchChanges,
+  ListAttendancePunches,
   ListPeriodEmployees,
   ListPeriods,
   ListUsers,
@@ -22,9 +27,14 @@ import {
   ReopenPeriod,
   ResetUserPassword,
   SaveAttendanceDevice,
+  SaveAttendanceExport,
+  SaveAttendanceHoliday,
+  SaveAttendancePunch,
+  SaveAttendanceWorkPolicy,
   SaveExport,
   SavePeriodEmployee,
   SetUserEnabled,
+  SyncAttendanceDevice,
   TestAttendanceDevice,
   ValidatePayroll,
 } from "../wailsjs/go/main/App";
@@ -112,6 +122,59 @@ type Device = {
   lastCheckedAt: string;
   linkedUsers: number;
 };
+type Punch = {
+  id: number;
+  employeeId: string;
+  employeeName: string;
+  deviceId: number;
+  deviceName: string;
+  deviceUserId: string;
+  occurredAt: string;
+  direction: "entry" | "exit" | "unknown";
+  verification: string;
+  source: "device" | "manual";
+  note: string;
+  edited: boolean;
+  updatedAt: string;
+  unlinked: boolean;
+};
+type PunchFilter = {
+  from: string;
+  to: string;
+  employeeId: string;
+  deviceId: number;
+  query: string;
+  cursor: number;
+  limit: number;
+};
+type PunchPage = {
+  items: Punch[];
+  nextCursor: number;
+  total: number;
+  unlinked: number;
+};
+type Holiday = {
+  date: string;
+  name: string;
+  kind: "national" | "religious" | "company";
+  paid: boolean;
+  premiumBasisPoints: number;
+  status: "confirmed" | "provisional";
+  source: string;
+};
+type WorkPolicy = {
+  sector: "non_agricultural" | "agricultural";
+  weeklyMinutes: number;
+  dayStart: string;
+  dayEnd: string;
+  breakMinutes: number;
+  graceMinutes: number;
+  dayPremiumBasisPoints: number;
+  nightPremiumBasisPoints: number;
+  restDayPremiumBasisPoints: number;
+  restNightPremiumBasisPoints: number;
+  rulesVersion: string;
+};
 type Route =
   | "overview"
   | "employees"
@@ -119,6 +182,7 @@ type Route =
   | "cnss"
   | "exports"
   | "periods"
+  | "attendance"
   | "devices"
   | "access";
 
@@ -202,6 +266,19 @@ const blankDevice: Device = {
   lastStatus: "never",
   lastCheckedAt: "",
   linkedUsers: 0,
+};
+const defaultWorkPolicy: WorkPolicy = {
+  sector: "non_agricultural",
+  weeklyMinutes: 2640,
+  dayStart: "06:00",
+  dayEnd: "21:00",
+  breakMinutes: 60,
+  graceMinutes: 5,
+  dayPremiumBasisPoints: 2500,
+  nightPremiumBasisPoints: 5000,
+  restDayPremiumBasisPoints: 5000,
+  restNightPremiumBasisPoints: 10000,
+  rulesVersion: "MA-CODE-TRAVAIL-184-201",
 };
 const money = (value: number) =>
   new Intl.NumberFormat("fr-MA", {
@@ -822,7 +899,10 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
     },
     {
       label: "ATELIER",
-      items: [["devices", "Pointeuses ZKTeco", "device"]],
+      items: [
+        ["attendance", "Journal de pointage", "clock"],
+        ["devices", "Pointeuses ZKTeco", "device"],
+      ],
     },
   ];
   if (user.role === "admin")
@@ -921,6 +1001,13 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
             <AccessPage current={user} notify={setMessage} />
           ) : route === "devices" ? (
             <DevicesPage employees={employees} notify={setMessage} />
+          ) : route === "attendance" ? (
+            <AttendancePage
+              employees={employees}
+              activePeriod={activePeriod}
+              isAdmin={user.role === "admin"}
+              notify={setMessage}
+            />
           ) : route === "periods" ? (
             <PeriodsPage
               periods={periods}
@@ -1696,6 +1783,482 @@ function AccessPage({
   );
 }
 
+function AttendancePage({
+  employees,
+  activePeriod,
+  isAdmin,
+  notify,
+}: {
+  employees: Employee[];
+  activePeriod: string;
+  isAdmin: boolean;
+  notify: (value: string) => void;
+}) {
+  const now = new Date(),
+    month = activePeriod || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
+    lastDay = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate(),
+    monthEnd = `${month}-${String(lastDay).padStart(2, "0")}`,
+    [view, setView] = useState<"journal" | "calendar" | "rules">("journal"),
+    [journalMode, setJournalMode] = useState<"events" | "days">("events"),
+    [filter, setFilter] = useState<PunchFilter>({
+      from: `${month}-01`,
+      to: monthEnd,
+      employeeId: "",
+      deviceId: 0,
+      query: "",
+      cursor: 0,
+      limit: 50,
+    }),
+    [page, setPage] = useState<PunchPage>({ items: [], nextCursor: 0, total: 0, unlinked: 0 }),
+    [devices, setDevices] = useState<Device[]>([]),
+    [holidays, setHolidays] = useState<Holiday[]>([]),
+    [policy, setPolicy] = useState<WorkPolicy>(defaultWorkPolicy),
+    [loadingJournal, setLoadingJournal] = useState(true),
+    [syncing, setSyncing] = useState(false),
+    [editing, setEditing] = useState<Punch | "new" | null>(null),
+    [exportOpen, setExportOpen] = useState(false),
+    [holidayDraft, setHolidayDraft] = useState<Holiday>({
+      date: `${month}-01`,
+      name: "",
+      kind: "company",
+      paid: true,
+      premiumBasisPoints: 5000,
+      status: "confirmed",
+      source: "Décision interne DRH",
+    });
+
+  const demoPunches: Punch[] = [
+    { id: 3, employeeId: "AT-0018", employeeName: "Lina Benjelloun", deviceId: 1, deviceName: "Entrée principale", deviceUserId: "18", occurredAt: `${month}-10T17:34:00+01:00`, direction: "exit", verification: "face", source: "device", note: "", edited: false, updatedAt: "", unlinked: false },
+    { id: 2, employeeId: "AT-0018", employeeName: "Lina Benjelloun", deviceId: 1, deviceName: "Entrée principale", deviceUserId: "18", occurredAt: `${month}-10T08:27:00+01:00`, direction: "entry", verification: "face", source: "device", note: "", edited: false, updatedAt: "", unlinked: false },
+    { id: 1, employeeId: "", employeeName: "", deviceId: 1, deviceName: "Entrée principale", deviceUserId: "204", occurredAt: `${month}-09T08:11:00+01:00`, direction: "entry", verification: "fingerprint", source: "device", note: "", edited: false, updatedAt: "", unlinked: true },
+  ];
+
+  async function loadJournal(cursor = 0, append = false) {
+    setLoadingJournal(true);
+    try {
+      const request = { ...filter, cursor };
+      const next = isNative
+        ? ((await ListAttendancePunches(request as never)) as PunchPage)
+        : { items: demoPunches, nextCursor: 0, total: 3, unlinked: 1 };
+      setPage((current) => ({
+        ...next,
+        total: next.total < 0 ? current.total : next.total,
+        unlinked: next.total < 0 ? current.unlinked : next.unlinked,
+        items: append ? [...current.items, ...next.items] : next.items,
+      }));
+    } catch (error) {
+      notify(friendlyError(error));
+    } finally {
+      setLoadingJournal(false);
+    }
+  }
+  async function loadReferenceData() {
+    try {
+      if (isNative) {
+        const [deviceRows, holidayRows, savedPolicy] = await Promise.all([
+          ListAttendanceDevices(),
+          ListAttendanceHolidays(month),
+          GetAttendanceWorkPolicy(),
+        ]);
+        setDevices(deviceRows as Device[]);
+        setHolidays(holidayRows as Holiday[]);
+        setPolicy(savedPolicy as WorkPolicy);
+      } else {
+        setDevices([{ ...blankDevice, id: 1, lastStatus: "online", linkedUsers: 3 }]);
+        setHolidays([
+          { date: `${month}-06`, name: "Marche Verte", kind: "national", paid: true, premiumBasisPoints: 10000, status: "confirmed", source: "Calendrier légal intégré; contrôle annuel requis" },
+        ]);
+      }
+    } catch (error) {
+      notify(friendlyError(error));
+    }
+  }
+  useEffect(() => {
+    loadJournal();
+    loadReferenceData();
+  }, [month]);
+
+  const dailyRows = useMemo(() => {
+    const groups = new Map<string, Punch[]>();
+    for (const punch of page.items) {
+      const key = `${punch.employeeId || `zk-${punch.deviceUserId}`}|${punch.occurredAt.slice(0, 10)}`;
+      groups.set(key, [...(groups.get(key) || []), punch]);
+    }
+    return [...groups.values()].map((items) => {
+      const ordered = [...items].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt));
+      let entry: Date | null = null,
+        minutes = 0,
+        anomalies = 0;
+      for (const item of ordered) {
+        const direction = item.direction === "unknown" ? (entry ? "exit" : "entry") : item.direction;
+        if (direction === "entry") {
+          if (entry) anomalies++;
+          entry = new Date(item.occurredAt);
+        } else if (!entry) anomalies++;
+        else {
+          minutes += Math.max(0, Math.round((new Date(item.occurredAt).getTime() - entry.getTime()) / 60000));
+          entry = null;
+        }
+      }
+      if (entry) anomalies++;
+      return { items: ordered, minutes, anomalies };
+    });
+  }, [page.items]);
+
+  async function synchronize() {
+    const targets = devices.filter((device) => device.enabled && device.protocol === "standalone");
+    if (!targets.length) {
+      notify("Aucune pointeuse Standalone active à synchroniser.");
+      return;
+    }
+    setSyncing(true);
+    try {
+      let imported = 0,
+        ignored = 0,
+        unlinked = 0;
+      if (isNative) {
+        for (const device of targets) {
+          const result = await SyncAttendanceDevice(device.id);
+          imported += result.imported;
+          ignored += result.ignored;
+          unlinked += result.unlinked;
+        }
+      }
+      await loadJournal();
+      notify(`${imported} nouveau(x) pointage(s) · ${ignored} déjà présent(s) · ${unlinked} à rattacher`);
+    } catch (error) {
+      notify(friendlyError(error));
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  async function saveHoliday(event: FormEvent) {
+    event.preventDefault();
+    try {
+      if (isNative) await SaveAttendanceHoliday(holidayDraft as never);
+      setHolidayDraft({ ...holidayDraft, name: "" });
+      await loadReferenceData();
+      notify("Jour spécial enregistré avec son coefficient.");
+    } catch (error) {
+      notify(friendlyError(error));
+    }
+  }
+  async function removeHoliday(date: string) {
+    try {
+      if (isNative) await DeleteAttendanceHoliday(date);
+      await loadReferenceData();
+      notify("Jour spécial supprimé.");
+    } catch (error) {
+      notify(friendlyError(error));
+    }
+  }
+  async function savePolicy(event: FormEvent) {
+    event.preventDefault();
+    try {
+      if (isNative) await SaveAttendanceWorkPolicy(policy as never);
+      notify("Règles de temps enregistrées et versionnées.");
+    } catch (error) {
+      notify(friendlyError(error));
+    }
+  }
+
+  return (
+    <>
+      <div className="page-title attendance-title">
+        <div>
+          <span className="eyebrow">TEMPS → CONTRÔLE → PAIE</span>
+          <h1>Journal de pointage</h1>
+          <p>Événements bruts, corrections tracées, calendrier et règles horaires dans un même flux.</p>
+        </div>
+        <div className="page-title-actions">
+          {isAdmin && (
+            <button className="button secondary" onClick={() => setEditing("new")}>
+              <Icon name="plus" /> Pointage manuel
+            </button>
+          )}
+          <button className="button primary" onClick={synchronize} disabled={!isAdmin || syncing}>
+            <Icon name="device" /> {syncing ? "Synchronisation…" : "Synchroniser"}
+          </button>
+        </div>
+      </div>
+
+      <div className="attendance-flow" aria-label="Flux de traitement du pointage">
+        <span><b>01</b><strong>Collecte</strong><small>Pointeuses toutes les 5 min</small></span>
+        <span><b>02</b><strong>Contrôle</strong><small>Liens, doublons, anomalies</small></span>
+        <span><b>03</b><strong>Validation</strong><small>Correction avec motif</small></span>
+        <span><b>04</b><strong>Paie</strong><small>Impact après approbation</small></span>
+      </div>
+
+      <div className="attendance-tabs" role="tablist">
+        <button className={view === "journal" ? "active" : ""} onClick={() => setView("journal")}>Journal</button>
+        <button className={view === "calendar" ? "active" : ""} onClick={() => setView("calendar")}>Calendrier & coefficients</button>
+        <button className={view === "rules" ? "active" : ""} onClick={() => setView("rules")}>Règles de travail</button>
+      </div>
+
+      {view === "journal" && (
+        <>
+          <section className="panel attendance-filters">
+            <TextField label="Du" type="date" value={filter.from} set={(from) => setFilter({ ...filter, from })} compact />
+            <TextField label="Au" type="date" value={filter.to} set={(to) => setFilter({ ...filter, to })} compact />
+            <SelectField label="Salarié" value={filter.employeeId} set={(employeeId) => setFilter({ ...filter, employeeId })} compact required={false}>
+              <option value="">Tous les salariés</option>
+              {employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.firstName} {employee.lastName}</option>)}
+            </SelectField>
+            <SelectField label="Pointeuse" value={String(filter.deviceId)} set={(value) => setFilter({ ...filter, deviceId: Number(value) })} compact required={false}>
+              <option value="0">Toutes les pointeuses</option>
+              {devices.map((device) => <option key={device.id} value={device.id}>{device.name}</option>)}
+            </SelectField>
+            <TextField label="Recherche" value={filter.query} set={(query) => setFilter({ ...filter, query })} placeholder="Matricule, nom ou ID ZK" compact required={false} />
+            <button className="button secondary" onClick={() => loadJournal()}><Icon name="search" /> Appliquer</button>
+          </section>
+          <div className="attendance-metrics">
+            <span><small>ÉVÉNEMENTS</small><strong>{page.total.toLocaleString("fr")}</strong></span>
+            <span><small>NON RATTACHÉS</small><strong>{page.unlinked.toLocaleString("fr")}</strong></span>
+            <span><small>CORRIGÉS SUR LA PAGE</small><strong>{page.items.filter((item) => item.edited).length}</strong></span>
+            <span><small>SYNC AUTO</small><strong>5 min</strong></span>
+          </div>
+          {page.unlinked > 0 && (
+            <div className="banner attendance-warning"><Icon name="warning" /><div><strong>{page.unlinked} événement(s) attendent un salarié</strong><small>Associez l’ID ZKTeco depuis la page Pointeuses; l’historique déjà reçu sera rattaché automatiquement.</small></div></div>
+          )}
+          <section className="panel table-panel attendance-table">
+            <div className="panel-head">
+              <div><h2>{journalMode === "events" ? "Événements horodatés" : "Vue journalière"}</h2><p>{loadingJournal ? "Lecture du coffre local…" : `${page.items.length} ligne(s) chargée(s), mémoire bornée`}</p></div>
+              <div className="table-actions">
+                <div className="view-switch">
+                  <button className={journalMode === "events" ? "active" : ""} onClick={() => setJournalMode("events")}>Événements</button>
+                  <button className={journalMode === "days" ? "active" : ""} onClick={() => setJournalMode("days")}>Par jour</button>
+                </div>
+                <button className="button secondary" onClick={() => setExportOpen(true)} disabled={!isAdmin}><Icon name="send" /> Export personnalisé</button>
+              </div>
+            </div>
+            <div className="table-scroll">
+              {journalMode === "events" ? (
+                <table>
+                  <thead><tr><th>SALARIÉ</th><th>DATE & HEURE</th><th>SENS</th><th>PREUVE</th><th>POINTEUSE</th><th>ÉTAT</th><th /></tr></thead>
+                  <tbody>{page.items.map((punch) => (
+                    <tr key={punch.id} className={punch.unlinked ? "row-warning" : ""}>
+                      <td><span><strong>{punch.employeeName || `ID ZK ${punch.deviceUserId}`}</strong><small>{punch.employeeId || "Non rattaché"}</small></span></td>
+                      <td>{new Date(punch.occurredAt).toLocaleString("fr-MA")}</td>
+                      <td><em className="badge neutral">{punch.direction === "entry" ? "Entrée" : punch.direction === "exit" ? "Sortie" : "À qualifier"}</em></td>
+                      <td>{verificationLabel(punch.verification)}</td>
+                      <td>{punch.deviceName || "Saisie manuelle"}</td>
+                      <td>{punch.edited ? <em className="badge neutral">Corrigé</em> : punch.source === "device" ? "Brut" : "Manuel"}</td>
+                      <td>{isAdmin && <button className="icon-button labeled" onClick={() => setEditing(punch)}><Icon name="more" /> Contrôler</button>}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              ) : (
+                <table>
+                  <thead><tr><th>SALARIÉ</th><th>DATE</th><th>PREMIÈRE ENTRÉE</th><th>DERNIÈRE SORTIE</th><th>TRAVAIL LU</th><th>ANOMALIES</th></tr></thead>
+                  <tbody>{dailyRows.map((row) => (
+                    <tr key={`${row.items[0].employeeId}-${row.items[0].occurredAt.slice(0, 10)}`}>
+                      <td><span><strong>{row.items[0].employeeName || `ID ZK ${row.items[0].deviceUserId}`}</strong><small>{row.items[0].employeeId || "Non rattaché"}</small></span></td>
+                      <td>{row.items[0].occurredAt.slice(0, 10)}</td>
+                      <td>{row.items.find((item) => item.direction !== "exit")?.occurredAt.slice(11, 16) || "—"}</td>
+                      <td>{[...row.items].reverse().find((item) => item.direction === "exit")?.occurredAt.slice(11, 16) || "—"}</td>
+                      <td>{formatMinutes(row.minutes)}</td>
+                      <td>{row.anomalies ? <em className="badge neutral">{row.anomalies} à revoir</em> : "Contrôlé"}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              )}
+            </div>
+            <div className="panel-foot"><span>Tri du plus récent · données locales SQLite</span>{page.nextCursor > 0 && <button className="button secondary small" onClick={() => loadJournal(page.nextCursor, true)}>Charger la suite</button>}</div>
+          </section>
+        </>
+      )}
+
+      {view === "calendar" && (
+        <div className="attendance-calendar-layout">
+          <section className="panel holiday-list">
+            <div className="panel-head"><div><h2>Calendrier {month}</h2><p>Les dates fixes sont chargées automatiquement; les fêtes religieuses restent à confirmer.</p></div></div>
+            {holidays.map((holiday) => (
+              <article key={holiday.date}>
+                <time>{holiday.date.slice(8, 10)}<small>{new Date(`${holiday.date}T12:00:00`).toLocaleDateString("fr-MA", { month: "short" })}</small></time>
+                <span><strong>{holiday.name}</strong><small>{holiday.kind === "company" ? "Jour entreprise" : holiday.kind === "religious" ? "Fête religieuse" : "Fête nationale"} · {holiday.status === "confirmed" ? "Confirmé" : "À confirmer"}</small></span>
+                <b>+{holiday.premiumBasisPoints / 100}%</b>
+                {isAdmin && holiday.kind === "company" && <button className="icon-button" onClick={() => removeHoliday(holiday.date)} aria-label={`Supprimer ${holiday.name}`}><Icon name="trash" /></button>}
+              </article>
+            ))}
+          </section>
+          <form className="panel holiday-form" onSubmit={saveHoliday}>
+            <span className="eyebrow">RÈGLE EXCEPTIONNELLE</span><h2>Ajouter un jour spécial</h2>
+            <TextField label="Date" type="date" value={holidayDraft.date} set={(date) => setHolidayDraft({ ...holidayDraft, date })} />
+            <TextField label="Libellé" value={holidayDraft.name} set={(name) => setHolidayDraft({ ...holidayDraft, name })} placeholder="Ex. inventaire annuel" />
+            <SelectField label="Type" value={holidayDraft.kind} set={(kind) => setHolidayDraft({ ...holidayDraft, kind: kind as Holiday["kind"] })}>
+              <option value="company">Jour spécial entreprise</option><option value="religious">Fête religieuse</option><option value="national">Fête nationale</option>
+            </SelectField>
+            <TextField label="Majoration horaire (%)" type="number" value={String(holidayDraft.premiumBasisPoints / 100)} set={(value) => setHolidayDraft({ ...holidayDraft, premiumBasisPoints: Math.round(Number(value) * 100) })} min={0} max={500} step={1} />
+            <SelectField label="Validation" value={holidayDraft.status} set={(status) => setHolidayDraft({ ...holidayDraft, status: status as Holiday["status"] })}>
+              <option value="confirmed">Confirmé</option><option value="provisional">À confirmer</option>
+            </SelectField>
+            <TextField label="Source / décision" value={holidayDraft.source} set={(source) => setHolidayDraft({ ...holidayDraft, source })} />
+            <button className="button primary wide" disabled={!isAdmin}>Enregistrer le jour et son taux</button>
+          </form>
+        </div>
+      )}
+
+      {view === "rules" && (
+        <form className="panel attendance-rules" onSubmit={savePolicy}>
+          <div className="rules-heading"><div><span className="eyebrow">RÉFÉRENTIEL VERSIONNÉ</span><h2>Temps de travail et majorations</h2><p>Base privée non agricole : 44 h/semaine. Toute proposition vers la paie doit rester contrôlée par l’administrateur.</p></div><em>{policy.rulesVersion}</em></div>
+          <div className="form-grid rules-grid">
+            <SelectField label="Secteur" value={policy.sector} set={(sector) => setPolicy({ ...policy, sector: sector as WorkPolicy["sector"], weeklyMinutes: sector === "agricultural" ? 2496 * 60 / 52 : 2640 })}>
+              <option value="non_agricultural">Non agricole</option><option value="agricultural">Agricole</option>
+            </SelectField>
+            <TextField label="Durée hebdomadaire (heures)" type="number" value={String(policy.weeklyMinutes / 60)} set={(value) => setPolicy({ ...policy, weeklyMinutes: Math.round(Number(value) * 60) })} min={1} max={168} step={0.25} />
+            <TextField label="Début plage de jour" type="time" value={policy.dayStart} set={(dayStart) => setPolicy({ ...policy, dayStart })} />
+            <TextField label="Fin plage de jour" type="time" value={policy.dayEnd} set={(dayEnd) => setPolicy({ ...policy, dayEnd })} />
+            <TextField label="Pause quotidienne (min)" type="number" value={String(policy.breakMinutes)} set={(value) => setPolicy({ ...policy, breakMinutes: Number(value) })} min={0} max={720} />
+            <TextField label="Tolérance retard (min)" type="number" value={String(policy.graceMinutes)} set={(value) => setPolicy({ ...policy, graceMinutes: Number(value) })} min={0} max={180} />
+            <TextField label="Majoration jour ouvrable (%)" type="number" value={String(policy.dayPremiumBasisPoints / 100)} set={(value) => setPolicy({ ...policy, dayPremiumBasisPoints: Math.round(Number(value) * 100) })} min={0} />
+            <TextField label="Majoration nuit ouvrable (%)" type="number" value={String(policy.nightPremiumBasisPoints / 100)} set={(value) => setPolicy({ ...policy, nightPremiumBasisPoints: Math.round(Number(value) * 100) })} min={0} />
+            <TextField label="Repos/férié de jour (%)" type="number" value={String(policy.restDayPremiumBasisPoints / 100)} set={(value) => setPolicy({ ...policy, restDayPremiumBasisPoints: Math.round(Number(value) * 100) })} min={0} />
+            <TextField label="Repos/férié de nuit (%)" type="number" value={String(policy.restNightPremiumBasisPoints / 100)} set={(value) => setPolicy({ ...policy, restNightPremiumBasisPoints: Math.round(Number(value) * 100) })} min={0} />
+          </div>
+          <div className="legal-control"><Icon name="shield" /><div><strong>Garde-fou de calcul</strong><small>Les congés, absences justifiées, repos compensateur et conventions collectives peuvent changer le résultat. Le journal calcule une proposition; il ne modifie pas le brut mensuel sans validation dédiée.</small></div></div>
+          <div className="dialog-actions"><button className="button primary" disabled={!isAdmin}>Enregistrer les règles</button></div>
+        </form>
+      )}
+
+      {editing && (
+        <AttendancePunchDialog
+          value={editing === "new" ? null : editing}
+          employees={employees}
+          devices={devices}
+          close={() => setEditing(null)}
+          saved={async () => { setEditing(null); await loadJournal(); }}
+          notify={notify}
+        />
+      )}
+      {exportOpen && <AttendanceExportDialog filter={filter} close={() => setExportOpen(false)} notify={notify} />}
+    </>
+  );
+}
+
+function AttendancePunchDialog({
+  value,
+  employees,
+  devices,
+  close,
+  saved,
+  notify,
+}: {
+  value: Punch | null;
+  employees: Employee[];
+  devices: Device[];
+  close: () => void;
+  saved: () => Promise<void>;
+  notify: (value: string) => void;
+}) {
+  const localValue = value?.occurredAt
+    ? new Date(value.occurredAt).toISOString().slice(0, 16)
+    : new Date().toISOString().slice(0, 16),
+    [employeeId, setEmployeeId] = useState(value?.employeeId || ""),
+    [deviceId, setDeviceId] = useState(value?.deviceId || 0),
+    [occurredAt, setOccurredAt] = useState(localValue),
+    [direction, setDirection] = useState(value?.direction || "entry"),
+    [verification, setVerification] = useState(value?.verification || "manual"),
+    [note, setNote] = useState(value?.note || ""),
+    [reason, setReason] = useState(""),
+    [history, setHistory] = useState<{ id: number; action: string; reason: string; changedBy: string; changedAt: string }[]>([]),
+    [error, setError] = useState("");
+  useEffect(() => {
+    if (value?.id && isNative) ListAttendancePunchChanges(value.id).then((rows) => setHistory(rows as typeof history)).catch(() => undefined);
+  }, [value?.id]);
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setError("");
+    try {
+      const input = {
+        id: value?.id || 0,
+        employeeId,
+        deviceId,
+        occurredAt: new Date(occurredAt).toISOString(),
+        direction,
+        verification,
+        note,
+        reason,
+      };
+      if (isNative) await SaveAttendancePunch(input as never);
+      await saved();
+      notify(value ? "Pointage corrigé; l’ancienne valeur reste dans l’historique." : "Pointage manuel ajouté et journalisé.");
+    } catch (caught) {
+      setError(friendlyError(caught));
+    }
+  }
+  return (
+    <div className="backdrop" onMouseDown={close}>
+      <form className="dialog attendance-dialog" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
+        <DialogHead eyebrow={value ? "CORRECTION AUDITÉE" : "SAISIE CONTRÔLÉE"} title={value ? "Corriger le pointage" : "Ajouter un pointage"} close={close} />
+        <div className="form-grid two">
+          <SelectField label="Salarié" value={employeeId} set={setEmployeeId}>
+            <option value="">Choisir…</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.firstName} {employee.lastName} · {employee.id}</option>)}
+          </SelectField>
+          <TextField label="Date et heure" type="datetime-local" value={occurredAt} set={setOccurredAt} />
+          <SelectField label="Sens" value={direction} set={(next) => setDirection(next as Punch["direction"])}>
+            <option value="entry">Entrée</option><option value="exit">Sortie</option><option value="unknown">À qualifier</option>
+          </SelectField>
+          <SelectField label="Méthode" value={verification} set={setVerification}>
+            <option value="manual">Saisie manuelle</option><option value="face">Visage</option><option value="fingerprint">Empreinte</option><option value="card">Badge</option><option value="password">Code</option><option value="other">Autre</option>
+          </SelectField>
+          <SelectField label="Pointeuse d’origine" value={String(deviceId)} set={(next) => setDeviceId(Number(next))} required={false}>
+            <option value="0">Aucune · saisie manuelle</option>{devices.map((device) => <option key={device.id} value={device.id}>{device.name}</option>)}
+          </SelectField>
+          <TextField label="Note" value={note} set={setNote} required={false} placeholder="Justificatif ou contexte" />
+          {value && <div className="span-two"><TextField label="Motif obligatoire de la correction" value={reason} set={setReason} placeholder="Au moins 5 caractères" minLength={5} /></div>}
+        </div>
+        {history.length > 0 && <div className="audit-strip"><strong>Historique immuable</strong>{history.map((item) => <span key={item.id}><b>{item.changedBy}</b> · {item.reason} · {new Date(item.changedAt).toLocaleString("fr-MA")}</span>)}</div>}
+        {error && <div className="form-error dialog-error"><Icon name="warning" />{error}</div>}
+        <div className="dialog-actions"><button type="button" className="button secondary" onClick={close}>Annuler</button><button className="button primary">{value ? "Enregistrer la correction" : "Ajouter au journal"}</button></div>
+      </form>
+    </div>
+  );
+}
+
+function AttendanceExportDialog({ filter, close, notify }: { filter: PunchFilter; close: () => void; notify: (value: string) => void }) {
+  const options = [
+      ["employeeId", "Matricule"], ["employeeName", "Salarié"], ["occurredAt", "Date et heure"],
+      ["direction", "Sens"], ["deviceName", "Pointeuse"], ["deviceUserId", "ID pointeuse"],
+      ["verification", "Méthode"], ["source", "Source"], ["note", "Note"], ["edited", "Corrigé"],
+    ],
+    [columns, setColumns] = useState(options.slice(0, 8).map(([key]) => key)),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
+  async function submit(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setError("");
+    try {
+      if (isNative) {
+        const result = await SaveAttendanceExport({ filter: { ...filter, cursor: 0 }, columns } as never);
+        notify(`${result.recordCount.toLocaleString("fr")} pointage(s) exporté(s) vers ${result.path}`);
+      } else notify("Export personnalisé prêt en mode aperçu.");
+      close();
+    } catch (caught) { setError(friendlyError(caught)); }
+    finally { setBusy(false); }
+  }
+  return (
+    <div className="backdrop" onMouseDown={close}>
+      <form className="dialog compact export-dialog" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
+        <DialogHead eyebrow="EXPORT SUR MESURE" title="Choisir les colonnes" close={close} />
+        <p className="dialog-intro">Le filtre actuel est conservé. Le CSV est écrit en flux pour rester rapide même avec un historique massif.</p>
+        <div className="column-picker">{options.map(([key, label]) => (
+          <label key={key}><input type="checkbox" checked={columns.includes(key)} onChange={(event) => setColumns(event.target.checked ? [...columns, key] : columns.filter((column) => column !== key))} /><span>{label}</span></label>
+        ))}</div>
+        {error && <div className="form-error dialog-error"><Icon name="warning" />{error}</div>}
+        <div className="dialog-actions"><button type="button" className="button secondary" onClick={close}>Annuler</button><button className="button primary" disabled={busy || columns.length === 0}>{busy ? "Écriture…" : "Enregistrer le CSV"}</button></div>
+      </form>
+    </div>
+  );
+}
+
+function verificationLabel(value: string) {
+  return ({ face: "Visage", fingerprint: "Empreinte", card: "Badge", password: "Code", manual: "Manuel", other: "Autre" } as Record<string, string>)[value] || value;
+}
+
+function formatMinutes(value: number) {
+  return `${Math.floor(value / 60)} h ${String(value % 60).padStart(2, "0")}`;
+}
+
 function DevicesPage({
   employees,
   notify,
@@ -2352,6 +2915,7 @@ function TextField({
   error,
   pattern,
   maxLength,
+  minLength,
   inputMode,
   min,
   max,
@@ -2371,6 +2935,7 @@ function TextField({
   error?: string;
   pattern?: string;
   maxLength?: number;
+  minLength?: number;
   inputMode?:
     | "none"
     | "text"
@@ -2410,6 +2975,7 @@ function TextField({
           aria-describedby={error ? errorID : undefined}
           pattern={pattern}
           maxLength={maxLength}
+          minLength={minLength}
           inputMode={inputMode}
           min={min}
           max={max}

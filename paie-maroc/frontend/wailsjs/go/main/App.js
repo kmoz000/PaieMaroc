@@ -26,6 +26,10 @@ export function CreateUser(arg1) {
   return window['go']['main']['App']['CreateUser'](arg1);
 }
 
+export function DeleteAttendanceHoliday(arg1) {
+  return window['go']['main']['App']['DeleteAttendanceHoliday'](arg1);
+}
+
 export function DeleteEmployee(arg1) {
   return window['go']['main']['App']['DeleteEmployee'](arg1);
 }
@@ -36,6 +40,10 @@ export function DeletePeriod(arg1) {
 
 export function GenerateCNSSBDS(arg1) {
   return window['go']['main']['App']['GenerateCNSSBDS'](arg1);
+}
+
+export function GetAttendanceWorkPolicy() {
+  return window['go']['main']['App']['GetAttendanceWorkPolicy']();
 }
 
 export function GetAuthState() {
@@ -56,6 +64,18 @@ export function LinkAttendanceEmployee(arg1, arg2, arg3) {
 
 export function ListAttendanceDevices() {
   return window['go']['main']['App']['ListAttendanceDevices']();
+}
+
+export function ListAttendanceHolidays(arg1) {
+  return window['go']['main']['App']['ListAttendanceHolidays'](arg1);
+}
+
+export function ListAttendancePunchChanges(arg1) {
+  return window['go']['main']['App']['ListAttendancePunchChanges'](arg1);
+}
+
+export function ListAttendancePunches(arg1) {
+  return window['go']['main']['App']['ListAttendancePunches'](arg1);
 }
 
 export function ListEmployees(arg1, arg2, arg3) {
@@ -102,6 +122,22 @@ export function SaveAttendanceDevice(arg1) {
   return window['go']['main']['App']['SaveAttendanceDevice'](arg1);
 }
 
+export function SaveAttendanceExport(arg1) {
+  return window['go']['main']['App']['SaveAttendanceExport'](arg1);
+}
+
+export function SaveAttendanceHoliday(arg1) {
+  return window['go']['main']['App']['SaveAttendanceHoliday'](arg1);
+}
+
+export function SaveAttendancePunch(arg1) {
+  return window['go']['main']['App']['SaveAttendancePunch'](arg1);
+}
+
+export function SaveAttendanceWorkPolicy(arg1) {
+  return window['go']['main']['App']['SaveAttendanceWorkPolicy'](arg1);
+}
+
 export function SaveEmployee(arg1) {
   return window['go']['main']['App']['SaveEmployee'](arg1);
 }
@@ -116,6 +152,10 @@ export function SavePeriodEmployee(arg1, arg2) {
 
 export function SetUserEnabled(arg1, arg2) {
   return window['go']['main']['App']['SetUserEnabled'](arg1, arg2);
+}
+
+export function SyncAttendanceDevice(arg1) {
+  return window['go']['main']['App']['SyncAttendanceDevice'](arg1);
 }
 
 export function TestAttendanceDevice(arg1) {

@@ -87,14 +87,26 @@ func (store *Store) LinkAttendanceEmployee(ctx context.Context, deviceID int64, 
 	if !deviceUserIDPattern.MatchString(deviceUserID) {
 		return errors.New("l’identifiant ZKTeco doit contenir 1 à 9 chiffres")
 	}
-	_, err := store.db.ExecContext(ctx, `INSERT INTO attendance_employee_links
+	tx, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("liaison salarié-pointeuse: %w", err)
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, `INSERT INTO attendance_employee_links
 		(device_id, employee_id, device_user_id) VALUES (?, ?, ?)
 		ON CONFLICT(device_id, employee_id) DO UPDATE SET device_user_id = excluded.device_user_id`,
 		deviceID, employeeID, deviceUserID)
 	if err != nil {
 		return fmt.Errorf("liaison salarié-pointeuse: %w", err)
 	}
-	return nil
+	// Reconcile previously downloaded events without touching records that an
+	// administrator already linked or corrected.
+	if _, err := tx.ExecContext(ctx, `UPDATE attendance_punches SET employee_id = ?,
+		updated_at = CURRENT_TIMESTAMP WHERE device_id = ? AND device_user_id = ?
+		AND employee_id IS NULL`, employeeID, deviceID, deviceUserID); err != nil {
+		return fmt.Errorf("rattachement de l’historique: %w", err)
+	}
+	return tx.Commit()
 }
 
 func (store *Store) attendanceDeviceByID(ctx context.Context, id int64) (attendance.Device, error) {

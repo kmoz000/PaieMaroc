@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"os"
@@ -22,11 +23,14 @@ import (
 
 // App is the Wails boundary. Business rules remain in internal packages.
 type App struct {
-	ctx        context.Context
-	store      *store.Store
-	startupErr error
-	sessionMu  sync.RWMutex
-	sessionID  int64
+	ctx                  context.Context
+	store                *store.Store
+	startupErr           error
+	sessionMu            sync.RWMutex
+	sessionID            int64
+	attendanceSyncMu     sync.Mutex
+	attendanceSyncCancel context.CancelFunc
+	attendanceSyncWG     sync.WaitGroup
 }
 
 type AuthState struct {
@@ -78,6 +82,16 @@ type CNSSResult struct {
 	CappedCentimes int64  `json:"cappedCentimes"`
 }
 
+type AttendanceExportInput struct {
+	Filter  attendance.PunchFilter `json:"filter"`
+	Columns []string               `json:"columns"`
+}
+
+type AttendanceExportResult struct {
+	Path        string `json:"path"`
+	RecordCount int64  `json:"recordCount"`
+}
+
 func NewApp() *App {
 	return &App{}
 }
@@ -95,9 +109,16 @@ func (app *App) startup(ctx context.Context) {
 		return
 	}
 	app.store, app.startupErr = store.Open(filepath.Join(appDir, "paie-maroc.db"))
+	if app.startupErr == nil {
+		app.startAttendanceAutoSync(ctx)
+	}
 }
 
 func (app *App) shutdown(context.Context) {
+	if app.attendanceSyncCancel != nil {
+		app.attendanceSyncCancel()
+		app.attendanceSyncWG.Wait()
+	}
 	if app.store != nil {
 		_ = app.store.Close()
 	}
@@ -589,6 +610,218 @@ func (app *App) LinkAttendanceEmployee(deviceID int64, employeeID, deviceUserID 
 		return err
 	}
 	return app.store.LinkAttendanceEmployee(app.ctx, deviceID, employeeID, deviceUserID)
+}
+
+func (app *App) ListAttendancePunches(filter attendance.PunchFilter) (attendance.PunchPage, error) {
+	if _, err := app.requireAuthenticated(); err != nil {
+		return attendance.PunchPage{}, err
+	}
+	return app.store.ListAttendancePunches(app.ctx, filter)
+}
+
+func (app *App) SaveAttendancePunch(input attendance.PunchInput) (attendance.Punch, error) {
+	user, err := app.requireAdmin()
+	if err != nil {
+		return attendance.Punch{}, err
+	}
+	return app.store.SaveAttendancePunch(app.ctx, user.ID, input)
+}
+
+func (app *App) ListAttendancePunchChanges(punchID int64) ([]attendance.PunchChange, error) {
+	if _, err := app.requireAdmin(); err != nil {
+		return nil, err
+	}
+	return app.store.ListAttendancePunchChanges(app.ctx, punchID)
+}
+
+func (app *App) SyncAttendanceDevice(deviceID int64) (attendance.SyncResult, error) {
+	if _, err := app.requireAdmin(); err != nil {
+		return attendance.SyncResult{}, err
+	}
+	return app.syncAttendanceDevice(app.ctx, deviceID)
+}
+
+func (app *App) ListAttendanceHolidays(month string) ([]attendance.Holiday, error) {
+	if _, err := app.requireAuthenticated(); err != nil {
+		return nil, err
+	}
+	return app.store.ListAttendanceHolidays(app.ctx, month)
+}
+
+func (app *App) SaveAttendanceHoliday(holiday attendance.Holiday) error {
+	if _, err := app.requireAdmin(); err != nil {
+		return err
+	}
+	return app.store.SaveAttendanceHoliday(app.ctx, holiday)
+}
+
+func (app *App) DeleteAttendanceHoliday(date string) error {
+	if _, err := app.requireAdmin(); err != nil {
+		return err
+	}
+	return app.store.DeleteAttendanceHoliday(app.ctx, date)
+}
+
+func (app *App) GetAttendanceWorkPolicy() (attendance.WorkPolicy, error) {
+	if _, err := app.requireAuthenticated(); err != nil {
+		return attendance.WorkPolicy{}, err
+	}
+	return app.store.GetAttendanceWorkPolicy(app.ctx)
+}
+
+func (app *App) SaveAttendanceWorkPolicy(policy attendance.WorkPolicy) error {
+	if _, err := app.requireAdmin(); err != nil {
+		return err
+	}
+	return app.store.SaveAttendanceWorkPolicy(app.ctx, policy)
+}
+
+func (app *App) SaveAttendanceExport(input AttendanceExportInput) (AttendanceExportResult, error) {
+	if _, err := app.requireAdmin(); err != nil {
+		return AttendanceExportResult{}, err
+	}
+	columns, err := attendance.ValidateExportColumns(input.Columns)
+	if err != nil {
+		return AttendanceExportResult{}, err
+	}
+	path, err := runtime.SaveFileDialog(app.ctx, runtime.SaveDialogOptions{
+		Title:           "Exporter le journal de pointage",
+		DefaultFilename: "JOURNAL_POINTAGE_" + input.Filter.From + "_" + input.Filter.To + ".csv",
+		Filters:         []runtime.FileFilter{{DisplayName: "CSV compatible Excel (*.csv)", Pattern: "*.csv"}},
+	})
+	if err != nil {
+		return AttendanceExportResult{}, fmt.Errorf("sélection de la destination: %w", err)
+	}
+	if path == "" {
+		return AttendanceExportResult{}, errors.New("export annulé")
+	}
+	output, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		return AttendanceExportResult{}, fmt.Errorf("création de l’export: %w", err)
+	}
+	if _, err := output.Write([]byte{0xEF, 0xBB, 0xBF}); err != nil {
+		_ = output.Close()
+		return AttendanceExportResult{}, err
+	}
+	writer := csv.NewWriter(output)
+	writer.Comma = ';'
+	if err := writer.Write(attendanceExportHeaders(columns)); err != nil {
+		_ = output.Close()
+		return AttendanceExportResult{}, err
+	}
+	var count int64
+	walkErr := app.store.WalkAttendancePunches(app.ctx, input.Filter, func(punch attendance.Punch) error {
+		count++
+		return writer.Write(attendanceExportRow(columns, punch))
+	})
+	writer.Flush()
+	flushErr := writer.Error()
+	closeErr := output.Close()
+	if walkErr != nil || flushErr != nil || closeErr != nil {
+		_ = os.Remove(path)
+		if walkErr != nil {
+			return AttendanceExportResult{}, walkErr
+		}
+		if flushErr != nil {
+			return AttendanceExportResult{}, flushErr
+		}
+		return AttendanceExportResult{}, closeErr
+	}
+	return AttendanceExportResult{Path: path, RecordCount: count}, nil
+}
+
+func (app *App) syncAttendanceDevice(ctx context.Context, deviceID int64) (attendance.SyncResult, error) {
+	app.attendanceSyncMu.Lock()
+	defer app.attendanceSyncMu.Unlock()
+	device, err := app.store.AttendanceDeviceByID(ctx, deviceID)
+	if err != nil {
+		return attendance.SyncResult{}, err
+	}
+	if !device.Enabled {
+		return attendance.SyncResult{}, errors.New("la synchronisation est désactivée pour cette pointeuse")
+	}
+	if device.Protocol != attendance.ProtocolStandalone {
+		return attendance.SyncResult{}, errors.New("la synchronisation automatique directe exige le mode Standalone TCP/IP; ADMS et ZKBio Time utilisent leur adaptateur serveur")
+	}
+	since, err := app.store.LastAttendanceSync(ctx, deviceID)
+	if err != nil {
+		return attendance.SyncResult{}, err
+	}
+	raw, err := attendance.PullStandalone(ctx, device, since.Add(-time.Minute))
+	if err != nil {
+		app.store.RecordAttendanceSyncError(ctx, deviceID, err)
+		return attendance.SyncResult{}, err
+	}
+	return app.store.ImportAttendancePunches(ctx, deviceID, raw)
+}
+
+func (app *App) startAttendanceAutoSync(parent context.Context) {
+	ctx, cancel := context.WithCancel(parent)
+	app.attendanceSyncCancel = cancel
+	app.attendanceSyncWG.Add(1)
+	go func() {
+		defer app.attendanceSyncWG.Done()
+		timer := time.NewTimer(30 * time.Second)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+		}
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for {
+			devices, err := app.store.ListAttendanceDevices(ctx)
+			if err == nil {
+				for _, device := range devices {
+					if device.Enabled && device.Protocol == attendance.ProtocolStandalone {
+						_, _ = app.syncAttendanceDevice(ctx, device.ID)
+					}
+				}
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
+}
+
+func attendanceExportHeaders(columns []string) []string {
+	labels := map[string]string{
+		"employeeId": "Matricule", "employeeName": "Salarié", "occurredAt": "Date et heure",
+		"direction": "Sens", "deviceName": "Pointeuse", "deviceUserId": "ID pointeuse",
+		"verification": "Vérification", "source": "Source", "note": "Note", "edited": "Corrigé",
+	}
+	result := make([]string, len(columns))
+	for index, column := range columns {
+		result[index] = labels[column]
+	}
+	return result
+}
+
+func attendanceExportRow(columns []string, punch attendance.Punch) []string {
+	values := map[string]string{
+		"employeeId": punch.EmployeeID, "employeeName": punch.EmployeeName,
+		"occurredAt": punch.OccurredAt, "direction": punch.Direction,
+		"deviceName": punch.DeviceName, "deviceUserId": punch.DeviceUserID,
+		"verification": punch.Verification, "source": punch.Source, "note": punch.Note,
+		"edited": map[bool]string{true: "Oui", false: "Non"}[punch.Edited],
+	}
+	result := make([]string, len(columns))
+	for index, column := range columns {
+		result[index] = safeAttendanceSpreadsheetCell(values[column])
+	}
+	return result
+}
+
+func safeAttendanceSpreadsheetCell(value string) string {
+	trimmed := strings.TrimLeft(value, " \t\r\n")
+	if trimmed != "" && strings.ContainsRune("=+-@", rune(trimmed[0])) {
+		return "'" + value
+	}
+	return value
 }
 
 func (app *App) setSession(id int64) {

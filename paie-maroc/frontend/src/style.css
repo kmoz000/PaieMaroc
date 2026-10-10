@@ -1,10 +1,15 @@
 html {
   background: #f6f9fc;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 body {
   margin: 0;
   min-width: 1080px;
-  min-height: 100vh;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
   font-family:
     Inter,
     ui-sans-serif,
@@ -13,6 +18,11 @@ body {
     "Segoe UI",
     sans-serif;
   -webkit-font-smoothing: antialiased;
+}
+#root {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 button,
 input,

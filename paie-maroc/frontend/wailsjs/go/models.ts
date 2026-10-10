@@ -30,6 +30,30 @@ export namespace attendance {
 	        this.linkedUsers = source["linkedUsers"];
 	    }
 	}
+	export class Holiday {
+	    date: string;
+	    name: string;
+	    kind: string;
+	    paid: boolean;
+	    premiumBasisPoints: number;
+	    status: string;
+	    source: string;
+
+	    static createFrom(source: any = {}) {
+	        return new Holiday(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.date = source["date"];
+	        this.name = source["name"];
+	        this.kind = source["kind"];
+	        this.paid = source["paid"];
+	        this.premiumBasisPoints = source["premiumBasisPoints"];
+	        this.status = source["status"];
+	        this.source = source["source"];
+	    }
+	}
 	export class ProbeResult {
 	    reachable: boolean;
 	    latencyMs: number;
@@ -68,6 +92,210 @@ export namespace attendance {
 	        this.fingerCapacity = source["fingerCapacity"];
 	        this.maxEvents = source["maxEvents"];
 	        this.notes = source["notes"];
+	    }
+	}
+	export class Punch {
+	    id: number;
+	    employeeId: string;
+	    employeeName: string;
+	    deviceId: number;
+	    deviceName: string;
+	    deviceUserId: string;
+	    occurredAt: string;
+	    direction: string;
+	    verification: string;
+	    source: string;
+	    note: string;
+	    edited: boolean;
+	    updatedAt: string;
+	    unlinked: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new Punch(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.employeeId = source["employeeId"];
+	        this.employeeName = source["employeeName"];
+	        this.deviceId = source["deviceId"];
+	        this.deviceName = source["deviceName"];
+	        this.deviceUserId = source["deviceUserId"];
+	        this.occurredAt = source["occurredAt"];
+	        this.direction = source["direction"];
+	        this.verification = source["verification"];
+	        this.source = source["source"];
+	        this.note = source["note"];
+	        this.edited = source["edited"];
+	        this.updatedAt = source["updatedAt"];
+	        this.unlinked = source["unlinked"];
+	    }
+	}
+	export class PunchChange {
+	    id: number;
+	    punchId: number;
+	    action: string;
+	    reason: string;
+	    changedBy: string;
+	    beforeJson: string;
+	    afterJson: string;
+	    changedAt: string;
+
+	    static createFrom(source: any = {}) {
+	        return new PunchChange(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.punchId = source["punchId"];
+	        this.action = source["action"];
+	        this.reason = source["reason"];
+	        this.changedBy = source["changedBy"];
+	        this.beforeJson = source["beforeJson"];
+	        this.afterJson = source["afterJson"];
+	        this.changedAt = source["changedAt"];
+	    }
+	}
+	export class PunchFilter {
+	    from: string;
+	    to: string;
+	    employeeId: string;
+	    deviceId: number;
+	    query: string;
+	    cursor: number;
+	    limit: number;
+
+	    static createFrom(source: any = {}) {
+	        return new PunchFilter(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.from = source["from"];
+	        this.to = source["to"];
+	        this.employeeId = source["employeeId"];
+	        this.deviceId = source["deviceId"];
+	        this.query = source["query"];
+	        this.cursor = source["cursor"];
+	        this.limit = source["limit"];
+	    }
+	}
+	export class PunchInput {
+	    id: number;
+	    employeeId: string;
+	    deviceId: number;
+	    occurredAt: string;
+	    direction: string;
+	    verification: string;
+	    note: string;
+	    reason: string;
+
+	    static createFrom(source: any = {}) {
+	        return new PunchInput(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.employeeId = source["employeeId"];
+	        this.deviceId = source["deviceId"];
+	        this.occurredAt = source["occurredAt"];
+	        this.direction = source["direction"];
+	        this.verification = source["verification"];
+	        this.note = source["note"];
+	        this.reason = source["reason"];
+	    }
+	}
+	export class PunchPage {
+	    items: Punch[];
+	    nextCursor: number;
+	    total: number;
+	    unlinked: number;
+
+	    static createFrom(source: any = {}) {
+	        return new PunchPage(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.items = this.convertValues(source["items"], Punch);
+	        this.nextCursor = source["nextCursor"];
+	        this.total = source["total"];
+	        this.unlinked = source["unlinked"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class SyncResult {
+	    deviceId: number;
+	    read: number;
+	    imported: number;
+	    ignored: number;
+	    unlinked: number;
+	    message: string;
+
+	    static createFrom(source: any = {}) {
+	        return new SyncResult(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.deviceId = source["deviceId"];
+	        this.read = source["read"];
+	        this.imported = source["imported"];
+	        this.ignored = source["ignored"];
+	        this.unlinked = source["unlinked"];
+	        this.message = source["message"];
+	    }
+	}
+	export class WorkPolicy {
+	    sector: string;
+	    weeklyMinutes: number;
+	    dayStart: string;
+	    dayEnd: string;
+	    breakMinutes: number;
+	    graceMinutes: number;
+	    dayPremiumBasisPoints: number;
+	    nightPremiumBasisPoints: number;
+	    restDayPremiumBasisPoints: number;
+	    restNightPremiumBasisPoints: number;
+	    rulesVersion: string;
+
+	    static createFrom(source: any = {}) {
+	        return new WorkPolicy(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sector = source["sector"];
+	        this.weeklyMinutes = source["weeklyMinutes"];
+	        this.dayStart = source["dayStart"];
+	        this.dayEnd = source["dayEnd"];
+	        this.breakMinutes = source["breakMinutes"];
+	        this.graceMinutes = source["graceMinutes"];
+	        this.dayPremiumBasisPoints = source["dayPremiumBasisPoints"];
+	        this.nightPremiumBasisPoints = source["nightPremiumBasisPoints"];
+	        this.restDayPremiumBasisPoints = source["restDayPremiumBasisPoints"];
+	        this.restNightPremiumBasisPoints = source["restNightPremiumBasisPoints"];
+	        this.rulesVersion = source["rulesVersion"];
 	    }
 	}
 
@@ -163,6 +391,52 @@ export namespace exporter {
 
 export namespace main {
 
+	export class AttendanceExportInput {
+	    filter: attendance.PunchFilter;
+	    columns: string[];
+
+	    static createFrom(source: any = {}) {
+	        return new AttendanceExportInput(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.filter = this.convertValues(source["filter"], attendance.PunchFilter);
+	        this.columns = source["columns"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class AttendanceExportResult {
+	    path: string;
+	    recordCount: number;
+
+	    static createFrom(source: any = {}) {
+	        return new AttendanceExportResult(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.recordCount = source["recordCount"];
+	    }
+	}
 	export class AuthState {
 	    setupRequired: boolean;
 	    authenticated: boolean;

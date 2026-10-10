@@ -112,3 +112,30 @@ describe("CNSS visual workflow", () => {
     ).toBeEnabled();
   });
 });
+
+describe("attendance journal", () => {
+  it("guides the user from raw punches to calendar and work rules", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(
+      await screen.findByRole(
+        "button",
+        { name: /Journal de pointage/ },
+        { timeout: 2000 },
+      ),
+    );
+
+    expect(screen.getByRole("heading", { name: "Journal de pointage" })).toBeVisible();
+    expect(screen.getAllByText("Lina Benjelloun")[0]).toBeVisible();
+    expect(screen.getByText(/événement\(s\) attendent un salarié/)).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Calendrier & coefficients" }));
+    expect(screen.getByRole("heading", { name: /Calendrier/ })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Ajouter un jour spécial" })).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Règles de travail" }));
+    expect(screen.getByRole("heading", { name: "Temps de travail et majorations" })).toBeVisible();
+    expect(screen.getByText("Garde-fou de calcul")).toBeVisible();
+  });
+});
