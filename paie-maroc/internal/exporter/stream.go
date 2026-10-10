@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Niceblueman/PaieMaroc/paie-maroc/internal/payroll"
+	"github.com/kmoz000/PaieMaroc/paie-maroc/internal/payroll"
 )
 
 const simtMaxRows = 99_999

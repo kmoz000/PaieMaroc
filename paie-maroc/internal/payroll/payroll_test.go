@@ -3,7 +3,7 @@ package payroll_test
 import (
 	"testing"
 
-	"github.com/Niceblueman/PaieMaroc/paie-maroc/internal/payroll"
+	"github.com/kmoz000/PaieMaroc/paie-maroc/internal/payroll"
 )
 
 func TestCalculate(t *testing.T) {

@@ -7,8 +7,8 @@ import (
 	"io"
 	"testing"
 
-	"github.com/Niceblueman/PaieMaroc/paie-maroc/internal/exporter"
-	"github.com/Niceblueman/PaieMaroc/paie-maroc/internal/payroll"
+	"github.com/kmoz000/PaieMaroc/paie-maroc/internal/exporter"
+	"github.com/kmoz000/PaieMaroc/paie-maroc/internal/payroll"
 )
 
 func TestStreamCSV(t *testing.T) {

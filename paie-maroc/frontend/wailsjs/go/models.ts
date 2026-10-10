@@ -1,3 +1,125 @@
+export namespace attendance {
+
+	export class Device {
+	    id: number;
+	    name: string;
+	    model: string;
+	    protocol: string;
+	    host: string;
+	    port: number;
+	    enabled: boolean;
+	    lastStatus: string;
+	    lastCheckedAt: string;
+	    linkedUsers: number;
+
+	    static createFrom(source: any = {}) {
+	        return new Device(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.model = source["model"];
+	        this.protocol = source["protocol"];
+	        this.host = source["host"];
+	        this.port = source["port"];
+	        this.enabled = source["enabled"];
+	        this.lastStatus = source["lastStatus"];
+	        this.lastCheckedAt = source["lastCheckedAt"];
+	        this.linkedUsers = source["linkedUsers"];
+	    }
+	}
+	export class ProbeResult {
+	    reachable: boolean;
+	    latencyMs: number;
+	    message: string;
+
+	    static createFrom(source: any = {}) {
+	        return new ProbeResult(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.reachable = source["reachable"];
+	        this.latencyMs = source["latencyMs"];
+	        this.message = source["message"];
+	    }
+	}
+	export class Profile {
+	    model: string;
+	    protocols: string[];
+	    authentication: string[];
+	    faceCapacity: number;
+	    fingerCapacity: number;
+	    maxEvents: number;
+	    notes: string;
+
+	    static createFrom(source: any = {}) {
+	        return new Profile(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.model = source["model"];
+	        this.protocols = source["protocols"];
+	        this.authentication = source["authentication"];
+	        this.faceCapacity = source["faceCapacity"];
+	        this.fingerCapacity = source["fingerCapacity"];
+	        this.maxEvents = source["maxEvents"];
+	        this.notes = source["notes"];
+	    }
+	}
+
+}
+
+export namespace auth {
+
+	export class CreateInput {
+	    username: string;
+	    displayName: string;
+	    password: string;
+	    role: string;
+
+	    static createFrom(source: any = {}) {
+	        return new CreateInput(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.username = source["username"];
+	        this.displayName = source["displayName"];
+	        this.password = source["password"];
+	        this.role = source["role"];
+	    }
+	}
+	export class User {
+	    id: number;
+	    username: string;
+	    displayName: string;
+	    role: string;
+	    enabled: boolean;
+	    createdAt: string;
+	    lastLoginAt: string;
+
+	    static createFrom(source: any = {}) {
+	        return new User(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.username = source["username"];
+	        this.displayName = source["displayName"];
+	        this.role = source["role"];
+	        this.enabled = source["enabled"];
+	        this.createdAt = source["createdAt"];
+	        this.lastLoginAt = source["lastLoginAt"];
+	    }
+	}
+
+}
+
 export namespace exporter {
 
 	export class Company {
@@ -41,6 +163,40 @@ export namespace exporter {
 
 export namespace main {
 
+	export class AuthState {
+	    setupRequired: boolean;
+	    authenticated: boolean;
+	    user?: auth.User;
+
+	    static createFrom(source: any = {}) {
+	        return new AuthState(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.setupRequired = source["setupRequired"];
+	        this.authenticated = source["authenticated"];
+	        this.user = this.convertValues(source["user"], auth.User);
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class CNSSResult {
 	    path: string;
 	    imported: number;
@@ -341,6 +497,20 @@ export namespace payroll {
 
 export namespace store {
 
+	export class CreatePeriodInput {
+	    period: string;
+	    copyFrom: string;
+
+	    static createFrom(source: any = {}) {
+	        return new CreatePeriodInput(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.period = source["period"];
+	        this.copyFrom = source["copyFrom"];
+	    }
+	}
 	export class ImportStats {
 	    imported: number;
 	    rejected: number;
@@ -392,6 +562,30 @@ export namespace store {
 		    }
 		    return a;
 		}
+	}
+	export class Period {
+	    period: string;
+	    status: string;
+	    copiedFrom: string;
+	    employeeCount: number;
+	    grossCentimes: number;
+	    createdAt: string;
+	    closedAt: string;
+
+	    static createFrom(source: any = {}) {
+	        return new Period(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.period = source["period"];
+	        this.status = source["status"];
+	        this.copiedFrom = source["copiedFrom"];
+	        this.employeeCount = source["employeeCount"];
+	        this.grossCentimes = source["grossCentimes"];
+	        this.createdAt = source["createdAt"];
+	        this.closedAt = source["closedAt"];
+	    }
 	}
 
 }

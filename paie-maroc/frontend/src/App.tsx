@@ -1,61 +1,2132 @@
-import {useEffect, useMemo, useState} from 'react';
-import type {ReactElement} from 'react';
-import {CalculatePayroll, GenerateCNSSBDS, ImportEmployeesCSV, PreviewExport, SaveEmployee, SaveExport, ValidatePayroll} from '../wailsjs/go/main/App';
-import './App.css';
+import { useEffect, useMemo, useState } from "react";
+import type { FormEvent, ReactElement } from "react";
+import {
+  AttendanceProfiles,
+  CalculatePayroll,
+  ClosePeriod,
+  CreateInitialAdmin,
+  CreatePeriod,
+  CreateUser,
+  DeletePeriod,
+  GenerateCNSSBDS,
+  GetAuthState,
+  ImportEmployeesCSVToPeriod,
+  LinkAttendanceEmployee,
+  ListAttendanceDevices,
+  ListPeriodEmployees,
+  ListPeriods,
+  ListUsers,
+  Login,
+  Logout,
+  PreviewExport,
+  ReopenPeriod,
+  ResetUserPassword,
+  SaveAttendanceDevice,
+  SaveExport,
+  SavePeriodEmployee,
+  SetUserEnabled,
+  TestAttendanceDevice,
+  ValidatePayroll,
+} from "../wailsjs/go/main/App";
+import "./App.css";
 
-type Employee={id:string;firstName:string;lastName:string;cin:string;cnss:string;rib:string;daysWorked:number;dependants:number;grossCentimes:number;exemptCentimes:number;advanceCentimes:number};
-type Row={employee:Employee;employeeCnss:number;employeeAmo:number;incomeTax:number;netPay:number;employerCost:number};
-type Batch={rows:Row[];grossTotalCentimes:number;netTotalCentimes:number;employeeSocialTotal:number;incomeTaxTotal:number;employerChargesTotal:number;employerCostCentimes:number;rulesVersion:string};
+type User = {
+  id: number;
+  username: string;
+  displayName: string;
+  role: string;
+  enabled: boolean;
+  createdAt: string;
+  lastLoginAt: string;
+};
+type AuthState = {
+  setupRequired: boolean;
+  authenticated: boolean;
+  user?: User;
+};
+type Employee = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  cin: string;
+  cnss: string;
+  rib: string;
+  daysWorked: number;
+  dependants: number;
+  grossCentimes: number;
+  exemptCentimes: number;
+  advanceCentimes: number;
+};
+type Row = {
+  employee: Employee;
+  employeeCnss: number;
+  employeeAmo: number;
+  incomeTax: number;
+  netPay: number;
+  employerCost: number;
+};
+type Batch = {
+  rows: Row[];
+  grossTotalCentimes: number;
+  netTotalCentimes: number;
+  employeeSocialTotal: number;
+  incomeTaxTotal: number;
+  employerChargesTotal: number;
+  employerCostCentimes: number;
+  rulesVersion: string;
+};
+type Period = {
+  period: string;
+  status: string;
+  copiedFrom: string;
+  employeeCount: number;
+  grossCentimes: number;
+  createdAt: string;
+  closedAt: string;
+};
+type Device = {
+  id: number;
+  name: string;
+  model: string;
+  protocol: string;
+  host: string;
+  port: number;
+  enabled: boolean;
+  lastStatus: string;
+  lastCheckedAt: string;
+  linkedUsers: number;
+};
+type Route =
+  | "overview"
+  | "employees"
+  | "payroll"
+  | "cnss"
+  | "exports"
+  | "periods"
+  | "devices"
+  | "access";
 
-const seed:Employee[]=[
- {id:'AT-0018',firstName:'Lina',lastName:'Benjelloun',cin:'BE152487',cnss:'168764721',rib:'011780000012345678901234',daysWorked:26,dependants:2,grossCentimes:1280000,exemptCentimes:50000,advanceCentimes:0},
- {id:'AT-0024',firstName:'Yassine',lastName:'El Mansouri',cin:'BK652143',cnss:'123456789',rib:'022780000098765432109876',daysWorked:26,dependants:1,grossCentimes:940000,exemptCentimes:0,advanceCentimes:100000},
- {id:'AT-0031',firstName:'Salma',lastName:'Alaoui',cin:'AB782145',cnss:'987654321',rib:'007780000055555555555555',daysWorked:24,dependants:0,grossCentimes:760000,exemptCentimes:0,advanceCentimes:0},
- {id:'AT-0042',firstName:'Mehdi',lastName:'Amrani',cin:'CD341298',cnss:'456789123',rib:'013780000077777777777777',daysWorked:26,dependants:3,grossCentimes:1450000,exemptCentimes:80000,advanceCentimes:0},
+const isNative = Boolean((window as unknown as { go?: unknown }).go);
+const demoEmployees: Employee[] = [
+  {
+    id: "AT-0018",
+    firstName: "Lina",
+    lastName: "Benjelloun",
+    cin: "BE152487",
+    cnss: "168764721",
+    rib: "011780000012345678901234",
+    daysWorked: 26,
+    dependants: 2,
+    grossCentimes: 1280000,
+    exemptCentimes: 50000,
+    advanceCentimes: 0,
+  },
+  {
+    id: "AT-0024",
+    firstName: "Yassine",
+    lastName: "El Mansouri",
+    cin: "BK652143",
+    cnss: "123456789",
+    rib: "022780000098765432109876",
+    daysWorked: 26,
+    dependants: 1,
+    grossCentimes: 940000,
+    exemptCentimes: 0,
+    advanceCentimes: 100000,
+  },
+  {
+    id: "AT-0031",
+    firstName: "Salma",
+    lastName: "Alaoui",
+    cin: "AB782145",
+    cnss: "987654321",
+    rib: "007780000055555555555555",
+    daysWorked: 24,
+    dependants: 0,
+    grossCentimes: 760000,
+    exemptCentimes: 0,
+    advanceCentimes: 0,
+  },
 ];
-const steps=[['Aperçu','grid'],['Collaborateurs','users'],['Préparer la paie','calc'],['Déclaration CNSS','shield'],['Contrôles','check'],['Exports bancaires','send']];
-const formats=[['simt500','SIMT 500','Fixe · 500 caractères','Validé'],['csv','CSV universel','UTF-8 · séparateur ;','Prêt'],['iso20022','ISO 20022','pain.001.001.03','À confirmer']];
+const demoUser: User = {
+  id: 1,
+  username: "admin.paie",
+  displayName: "Karim Benali",
+  role: "admin",
+  enabled: true,
+  createdAt: "",
+  lastLoginAt: "",
+};
+const blankBatch: Batch = {
+  rows: [],
+  grossTotalCentimes: 0,
+  netTotalCentimes: 0,
+  employeeSocialTotal: 0,
+  incomeTaxTotal: 0,
+  employerChargesTotal: 0,
+  employerCostCentimes: 0,
+  rulesVersion: "MA-2026.1",
+};
+const blankDevice: Device = {
+  id: 0,
+  name: "Entrée principale",
+  model: "MB10-VL",
+  protocol: "standalone",
+  host: "192.168.1.201",
+  port: 4370,
+  enabled: true,
+  lastStatus: "never",
+  lastCheckedAt: "",
+  linkedUsers: 0,
+};
+const money = (value: number) =>
+  new Intl.NumberFormat("fr-MA", {
+    style: "currency",
+    currency: "MAD",
+    minimumFractionDigits: 2,
+  }).format(value / 100);
+const friendlyError = (error: unknown) =>
+  String(error).replace(/^Error:\s*/, "");
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+const roleName = (role: string) =>
+  role === "admin" ? "Administrateur" : "Gestionnaire paie";
 
-function Icon({name,size=18}:{name:string,size?:number}){const p:Record<string,ReactElement>={
- grid:<><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></>,
- users:<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></>,
- calc:<><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/></>,
- shield:<><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></>,
- check:<><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></>,
- send:<><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></>,plus:<><path d="M12 5v14M5 12h14"/></>,
- upload:<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></>,search:<><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></>,
- lock:<><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></>,arrow:<><path d="M5 12h14M13 6l6 6-6 6"/></>,
- database:<><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5M3 12c0 1.7 4 3 9 3s9-1.3 9-3"/></>,more:<><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></>};return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{p[name]}</svg>}
-
-const pct=(v:number,r:number)=>Math.round(v*r);
-function localCalc(employees:Employee[]):Batch{const rows=employees.map(employee=>{const taxable=employee.grossCentimes-employee.exemptCentimes,cnss=pct(Math.min(taxable,600000),.0448),amo=pct(taxable,.0226),annual=taxable*12,fees=Math.round(Math.min(annual*(annual>7800000?.25:.35),3500000)/12),base=Math.max(0,(taxable-cnss-amo-fees)*12);let ir=base>18000000?base*.37-2740000:base>10000000?base*.34-2200000:base>8000000?base*.3-1800000:base>6000000?base*.2-1000000:base>4000000?base*.1-400000:0;ir=Math.max(0,Math.round((ir-Math.min(employee.dependants,6)*50000)/12));const netPay=employee.grossCentimes-cnss-amo-ir-employee.advanceCentimes,charges=pct(Math.min(taxable,600000),.0898)+pct(taxable,.0411)+pct(taxable,.064)+pct(taxable,.016);return{employee,employeeCnss:cnss,employeeAmo:amo,incomeTax:ir,netPay,employerCost:employee.grossCentimes+charges}});return{rows,grossTotalCentimes:employees.reduce((s,e)=>s+e.grossCentimes,0),netTotalCentimes:rows.reduce((s,r)=>s+r.netPay,0),employeeSocialTotal:rows.reduce((s,r)=>s+r.employeeCnss+r.employeeAmo,0),incomeTaxTotal:rows.reduce((s,r)=>s+r.incomeTax,0),employerChargesTotal:rows.reduce((s,r)=>s+r.employerCost-r.employee.grossCentimes,0),employerCostCentimes:rows.reduce((s,r)=>s+r.employerCost,0),rulesVersion:'MA-2026.1'}}
-const money=(v:number)=>new Intl.NumberFormat('fr-MA',{style:'currency',currency:'MAD',minimumFractionDigits:2}).format(v/100);
-
-export default function App(){
- const [step,setStep]=useState(0),[employees,setEmployees]=useState(seed),[batch,setBatch]=useState<Batch>(()=>localCalc(seed)),[format,setFormat]=useState('simt500'),[search,setSearch]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState('Toutes les données sont enregistrées localement'),[editing,setEditing]=useState<Employee|null>(null);
- useEffect(()=>{const t=setTimeout(async()=>{try{setBatch(await CalculatePayroll(employees as never) as unknown as Batch)}catch{setBatch(localCalc(employees))}},160);return()=>clearTimeout(t)},[employees]);
- const rows=useMemo(()=>{const q=search.toLowerCase().trim();return q?batch.rows.filter(r=>`${r.employee.firstName} ${r.employee.lastName} ${r.employee.id}`.toLowerCase().includes(q)):batch.rows},[batch,search]);
- async function validate(){setBusy(true);try{const issues=await ValidatePayroll(employees as never);setMessage(issues.length?`${issues.length} anomalie(s) à corriger`:`${employees.length} salariés contrôlés · aucune anomalie`)}catch{setMessage('Contrôle local terminé · aucune anomalie bloquante')}finally{setBusy(false);setStep(4)}}
- async function importCSV(){setBusy(true);try{const s=await ImportEmployeesCSV();setMessage(`${s.imported.toLocaleString('fr')} lignes importées · ${s.rejected} rejetée(s)`)}catch(e){setMessage(String(e).includes('undefined')?'Import natif disponible dans l’application bureau':String(e))}finally{setBusy(false)}}
- async function generateCNSS(){setBusy(true);try{const r=await GenerateCNSSBDS();setMessage(`BDS contrôlé · ${r.employeeCount.toLocaleString('fr')} salariés · ${r.entrantCount} entrant(s)`)}catch(e){setMessage(String(e).includes('undefined')?'Assistant e-BDS disponible dans l’application bureau':String(e))}finally{setBusy(false)}}
- async function exportFile(){setBusy(true);const input={format,company:{name:'Atlas Conseil',affiliateCnss:'1773341',rib:'011780000000000000000123',participant:'011'},employees,period:'2026-10',executionDate:'2026-10-30',batchNumber:1};try{const p=await PreviewExport(input as never);setMessage(`${p.name} contrôlé · ${money(p.totalCentimes)}`);await SaveExport(input as never)}catch(e){setMessage(String(e).includes('undefined')?`Aperçu ${format.toUpperCase()} validé en mode navigateur`:String(e))}finally{setBusy(false)}}
- async function save(){if(!editing)return;setEmployees(c=>c.some(x=>x.id===editing.id)?c.map(x=>x.id===editing.id?editing:x):[...c,editing]);try{await SaveEmployee(editing as never)}catch{}setMessage(`${editing.firstName} ${editing.lastName} enregistré(e)`);setEditing(null)}
- function add(){setEditing({id:`AT-${String(employees.length+50).padStart(4,'0')}`,firstName:'',lastName:'',cin:'',cnss:'',rib:'',daysWorked:26,dependants:0,grossCentimes:600000,exemptCentimes:0,advanceCentimes:0})}
- return <div className="shell">
-  <aside className="side"><div className="brand"><b>M</b><div><strong>PaieMaroc</strong><small>RH · MAROC</small></div></div><div className="period"><small>PÉRIODE DE PAIE</small><strong>Octobre 2026</strong><i><em/></i><span>Clôture dans 6 jours</span></div><nav><p>ESPACE DE TRAVAIL</p>{steps.map(([label,icon],i)=><button key={label} className={step===i?'on':''} onClick={()=>setStep(i)}><Icon name={icon}/><span>{label}</span>{i===4&&<b>0</b>}</button>)}</nav><div className="sidefoot"><div className="private"><Icon name="lock" size={15}/><span><strong>Données privées</strong><small>Stockées sur cet appareil</small></span></div><div className="profile"><b>AC</b><span><strong>Atlas Conseil</strong><small>Administrateur paie</small></span><Icon name="more"/></div></div></aside>
-  <main><header><div><span>Paie</span><i>/</i><strong>{steps[step][0]}</strong></div><section><span className="online"><i/> Base locale</span><b>KB</b></section></header><div className="workspace">
-   <div className="hero"><div><small>PAIE MENSUELLE · 2026-10</small><h1>{step===0?'Bonjour, Karim.':steps[step][0]}</h1><p>{step===0?'Votre paie est presque prête. Vérifiez les éléments avant de générer vos remises.':'Un parcours guidé, contrôlé à chaque étape.'}</p></div><section><button className="ghost" onClick={importCSV} disabled={busy}><Icon name="upload"/>Importer CSV</button><button className="primary" onClick={add}><Icon name="plus"/>Ajouter un salarié</button></section></div>
-   <div className="notice"><span><Icon name="shield"/></span><div><strong>Règles Maroc 2026 chargées</strong><small>Barème IR, plafond CNSS et cotisations versionnés dans <code>MA-2026.1</code>.</small></div><button onClick={()=>setStep(4)}>Voir les paramètres <Icon name="arrow" size={14}/></button></div>
-   <div className="metrics"><Metric label="NET À PAYER" value={money(batch.netTotalCentimes)} detail="↑ 2,4 % vs. septembre" tone="coral" icon="send"/><Metric label="MASSE SALARIALE" value={money(batch.grossTotalCentimes)} detail="Brut mensuel déclaré" tone="blue" icon="calc"/><Metric label="CHARGES EMPLOYEUR" value={money(batch.employerChargesTotal)} detail="CNSS · AMO · AF · TFP" tone="gold" icon="shield"/><Metric label="COLLABORATEURS" value={String(employees.length)} detail={`${employees.length} actifs ce mois`} tone="green" icon="users"/></div>
-   <div className="content"><section className="paycard"><div className="cardhead"><div><h2>Préparation de la paie</h2><p>Montants calculés et prêts à contrôler</p></div><label><Icon name="search" size={15}/><input placeholder="Rechercher…" value={search} onChange={e=>setSearch(e.target.value)}/></label></div><div className="tablewrap"><table><thead><tr><th>COLLABORATEUR</th><th>BRUT</th><th>RETENUES</th><th>NET À PAYER</th><th>STATUT</th><th/></tr></thead><tbody>{rows.map(r=><tr key={r.employee.id} onDoubleClick={()=>setEditing(r.employee)}><td><b className="initials">{r.employee.firstName[0]}{r.employee.lastName[0]}</b><span><strong>{r.employee.firstName} {r.employee.lastName}</strong><small>{r.employee.id} · CNSS {r.employee.cnss}</small></span></td><td>{money(r.employee.grossCentimes)}</td><td className="minus">− {money(r.employeeCnss+r.employeeAmo+r.incomeTax+r.employee.advanceCentimes)}</td><td><strong>{money(r.netPay)}</strong></td><td><em className="ready"><i/>Prêt</em></td><td><button onClick={()=>setEditing(r.employee)}><Icon name="more"/></button></td></tr>)}</tbody></table></div><footer><span>{rows.length} affiché(s) · pagination serveur jusqu’à 1 000 000+</span><button onClick={()=>setStep(1)}>Voir tous <Icon name="arrow" size={13}/></button></footer></section>
-    <aside className="control"><div className="score"><b>92<small>%</small></b><span><strong>Prêt à clôturer</strong><small>3 étapes sur 4 terminées</small></span></div><div className="checks">{[['Données salariés',`${employees.length} dossiers complets`],['Calcul de paie',`Règles ${batch.rulesVersion}`],['Contrôles de cohérence','Aucune anomalie détectée']].map(x=><button key={x[0]}><b><Icon name="check" size={13}/></b><span><strong>{x[0]}</strong><small>{x[1]}</small></span></button>)}<button onClick={()=>setStep(3)}><b>4</b><span><strong>Préétabli CNSS</strong><small>À charger avant e-BDS</small></span></button></div><button className="checkbutton" onClick={validate} disabled={busy}>{busy?'Contrôle…':'Lancer les contrôles'}<Icon name="arrow"/></button></aside>
-   </div>
-   {step===3?<section className="exports cnss-export"><div><span className="fileicon"><Icon name="shield"/></span><article><h2>Générer la déclaration e-BDS</h2><p>Préétabli A00–A03 + déclarations CSV → BDS B00–B06 contrôlé.</p></article></div><div className="cnss-help"><b>Parcours guidé en 3 étapes</b><small>Entrants B04, sorties, absences, plafonds et sommes de contrôle.</small></div><button className="export" onClick={generateCNSS} disabled={busy}>{busy?'Contrôle…':'Choisir les fichiers'}<Icon name="arrow"/></button></section>:<section className="exports"><div><span className="fileicon"><Icon name="send"/></span><article><h2>Générer une remise bancaire</h2><p>Sélectionnez le contrat confirmé par votre banque.</p></article></div><div className="formats">{formats.map(f=><button key={f[0]} className={format===f[0]?'selected':''} onClick={()=>setFormat(f[0])}><i/><span><strong>{f[1]}</strong><small>{f[2]}</small></span><em>{f[3]}</em></button>)}</div><button className="export" onClick={exportFile} disabled={busy}>Contrôler et exporter<Icon name="arrow"/></button></section>}
-   <footer className="appfoot"><span><Icon name="database" size={13}/>Moteur disque · pagination bornée · import en flux</span><span>{message}</span></footer>
-  </div></main>
-  {editing&&<div className="backdrop" onMouseDown={()=>setEditing(null)}><section className="modal" onMouseDown={e=>e.stopPropagation()}><div className="modalhead"><div><small>FICHE COLLABORATEUR</small><h2>{editing.firstName||'Nouveau'} {editing.lastName}</h2></div><button onClick={()=>setEditing(null)}>×</button></div><div className="form"><Field label="Prénom" value={editing.firstName} change={v=>setEditing({...editing,firstName:v})}/><Field label="Nom" value={editing.lastName} change={v=>setEditing({...editing,lastName:v})}/><Field label="Matricule" value={editing.id} change={v=>setEditing({...editing,id:v})}/><Field label="CIN" value={editing.cin} change={v=>setEditing({...editing,cin:v.toUpperCase()})}/><Field label="N° CNSS" value={editing.cnss} change={v=>setEditing({...editing,cnss:v})}/><Field label="Jours déclarés" value={String(editing.daysWorked)} change={v=>setEditing({...editing,daysWorked:Number(v)})}/><Field wide label="RIB marocain · 24 chiffres" value={editing.rib} change={v=>setEditing({...editing,rib:v})}/><Field label="Salaire brut (MAD)" value={String(editing.grossCentimes/100)} change={v=>setEditing({...editing,grossCentimes:Math.round(Number(v)*100)})}/><Field label="Personnes à charge" value={String(editing.dependants)} change={v=>setEditing({...editing,dependants:Number(v)})}/></div><p className="modalnote"><Icon name="lock" size={14}/>Cette fiche est validée côté Go avant l’enregistrement local.</p><footer><button className="ghost" onClick={()=>setEditing(null)}>Annuler</button><button className="primary" onClick={save}>Enregistrer</button></footer></section></div>}
- </div>
+function Icon({ name, size = 18 }: { name: string; size?: number }) {
+  const p: Record<string, ReactElement> = {
+    grid: (
+      <>
+        <rect x="3" y="3" width="7" height="7" rx="2" />
+        <rect x="14" y="3" width="7" height="7" rx="2" />
+        <rect x="3" y="14" width="7" height="7" rx="2" />
+        <rect x="14" y="14" width="7" height="7" rx="2" />
+      </>
+    ),
+    users: (
+      <>
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8" />
+      </>
+    ),
+    calc: (
+      <>
+        <rect x="4" y="2" width="16" height="20" rx="2" />
+        <path d="M8 6h8M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01" />
+      </>
+    ),
+    shield: (
+      <>
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" />
+        <path d="m9 12 2 2 4-4" />
+      </>
+    ),
+    check: <path d="M20 6 9 17l-5-5" />,
+    send: (
+      <>
+        <path d="m22 2-7 20-4-9-9-4Z" />
+        <path d="M22 2 11 13" />
+      </>
+    ),
+    plus: <path d="M12 5v14M5 12h14" />,
+    search: (
+      <>
+        <circle cx="11" cy="11" r="8" />
+        <path d="m21 21-4.3-4.3" />
+      </>
+    ),
+    lock: (
+      <>
+        <rect x="3" y="11" width="18" height="10" rx="2" />
+        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+      </>
+    ),
+    arrow: (
+      <>
+        <path d="M5 12h14M13 6l6 6-6 6" />
+      </>
+    ),
+    database: (
+      <>
+        <ellipse cx="12" cy="5" rx="9" ry="3" />
+        <path d="M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5M3 12c0 1.7 4 3 9 3s9-1.3 9-3" />
+      </>
+    ),
+    calendar: (
+      <>
+        <rect x="3" y="5" width="18" height="16" rx="2" />
+        <path d="M16 3v4M8 3v4M3 11h18" />
+      </>
+    ),
+    clock: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 2" />
+      </>
+    ),
+    device: (
+      <>
+        <rect x="5" y="2" width="14" height="20" rx="2" />
+        <circle cx="12" cy="17" r="2" />
+        <path d="M9 6h6" />
+      </>
+    ),
+    logout: (
+      <>
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+      </>
+    ),
+    key: (
+      <>
+        <circle cx="8" cy="15" r="4" />
+        <path d="m11 12 9-9M18 5l2 2M15 8l2 2" />
+      </>
+    ),
+    trash: (
+      <>
+        <path d="M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6M10 11v6M14 11v6" />
+      </>
+    ),
+    more: (
+      <>
+        <circle cx="5" cy="12" r="1" />
+        <circle cx="12" cy="12" r="1" />
+        <circle cx="19" cy="12" r="1" />
+      </>
+    ),
+  };
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {p[name]}
+    </svg>
+  );
 }
 
-function Metric({label,value,detail,tone,icon}:{label:string,value:string,detail:string,tone:string,icon:string}){return <article className="metric"><div><span>{label}</span><i className={tone}><Icon name={icon}/></i></div><strong>{value}</strong><small>{detail}</small></article>}
-function Field({label,value,change,wide}:{label:string,value:string,change:(v:string)=>void,wide?:boolean}){return <label className={wide?'wide':''}>{label}<input value={value} onChange={e=>change(e.target.value)}/></label>}
+function localCalc(employees: Employee[]): Batch {
+  const pct = (v: number, r: number) => Math.round(v * r);
+  const rows = employees.map((employee) => {
+    const taxable = employee.grossCentimes - employee.exemptCentimes,
+      employeeCnss = pct(Math.min(taxable, 600000), 0.0448),
+      employeeAmo = pct(taxable, 0.0226),
+      netPay =
+        employee.grossCentimes -
+        employeeCnss -
+        employeeAmo -
+        employee.advanceCentimes,
+      charges = pct(Math.min(taxable, 600000), 0.0898) + pct(taxable, 0.1211);
+    return {
+      employee,
+      employeeCnss,
+      employeeAmo,
+      incomeTax: 0,
+      netPay,
+      employerCost: employee.grossCentimes + charges,
+    };
+  });
+  return {
+    ...blankBatch,
+    rows,
+    grossTotalCentimes: employees.reduce((s, e) => s + e.grossCentimes, 0),
+    netTotalCentimes: rows.reduce((s, r) => s + r.netPay, 0),
+    employerChargesTotal: rows.reduce(
+      (s, r) => s + r.employerCost - r.employee.grossCentimes,
+      0,
+    ),
+  };
+}
+
+export default function App() {
+  const [state, setState] = useState<AuthState | null>(null),
+    [startupError, setStartupError] = useState("");
+  useEffect(() => {
+    if (!isNative) {
+      setState({ setupRequired: false, authenticated: true, user: demoUser });
+      return;
+    }
+    GetAuthState()
+      .then((value) => setState(value as AuthState))
+      .catch((error) => setStartupError(friendlyError(error)));
+  }, []);
+  if (startupError) return <CenteredError message={startupError} />;
+  if (!state)
+    return (
+      <div className="boot">
+        <Brand />
+        <span className="spinner" />
+        <p>Ouverture de votre espace sécurisé…</p>
+      </div>
+    );
+  if (state.setupRequired)
+    return <AuthScreen mode="setup" onSuccess={setState} />;
+  if (!state.authenticated || !state.user)
+    return <AuthScreen mode="login" onSuccess={setState} />;
+  return (
+    <Workspace
+      user={state.user}
+      onLogout={async () => {
+        if (isNative) await Logout();
+        setState({ setupRequired: false, authenticated: false });
+      }}
+    />
+  );
+}
+
+function AuthScreen({
+  mode,
+  onSuccess,
+}: {
+  mode: "setup" | "login";
+  onSuccess: (state: AuthState) => void;
+}) {
+  const [displayName, setDisplayName] = useState(""),
+    [username, setUsername] = useState(""),
+    [password, setPassword] = useState(""),
+    [confirmation, setConfirmation] = useState(""),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setError("");
+    if (mode === "setup" && password !== confirmation) {
+      setError("Les deux mots de passe ne correspondent pas.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const next =
+        mode === "setup"
+          ? await CreateInitialAdmin({
+              displayName,
+              username,
+              password,
+              role: "admin",
+            } as never)
+          : await Login(username, password);
+      onSuccess(next as AuthState);
+    } catch (reason) {
+      setError(friendlyError(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="auth-shell">
+      <section className="auth-story">
+        <Brand light />
+        <div className="story-copy">
+          <span className="eyebrow">PAIE MAROCAINE, SANS FRICTION</span>
+          <h1>
+            {mode === "setup"
+              ? "Créez votre espace de paie sécurisé."
+              : "Heureux de vous revoir."}
+          </h1>
+          <p>
+            Vos salariés, périodes, déclarations CNSS, remises bancaires et
+            pointages réunis dans un parcours clair.
+          </p>
+          <ul>
+            <li>
+              <Icon name="check" />
+              Données conservées sur cet appareil
+            </li>
+            <li>
+              <Icon name="check" />
+              Mots de passe protégés par Argon2id
+            </li>
+            <li>
+              <Icon name="check" />
+              Droits administrateur et gestionnaire séparés
+            </li>
+          </ul>
+        </div>
+        <small>PaieMaroc · logiciel libre pour les employeurs marocains</small>
+      </section>
+      <main className="auth-main">
+        <form className="auth-card" onSubmit={submit}>
+          <div className="auth-step">
+            {mode === "setup" ? "1 sur 1" : "ACCÈS SÉCURISÉ"}
+          </div>
+          <h2>
+            {mode === "setup" ? "Administrateur initial" : "Se connecter"}
+          </h2>
+          <p>
+            {mode === "setup"
+              ? "Ce premier compte pourra inviter et gérer les autres utilisateurs."
+              : "Utilisez le compte créé par votre administrateur."}
+          </p>
+          {mode === "setup" && (
+            <TextField
+              label="Nom complet"
+              value={displayName}
+              set={setDisplayName}
+              placeholder="Karim Benali"
+              autoComplete="name"
+            />
+          )}
+          <TextField
+            label="Identifiant"
+            value={username}
+            set={setUsername}
+            placeholder="admin.paie"
+            autoComplete="username"
+          />
+          <TextField
+            label="Mot de passe"
+            value={password}
+            set={setPassword}
+            placeholder="12 caractères minimum"
+            type="password"
+            autoComplete={
+              mode === "setup" ? "new-password" : "current-password"
+            }
+          />
+          {mode === "setup" && (
+            <TextField
+              label="Confirmer le mot de passe"
+              value={confirmation}
+              set={setConfirmation}
+              placeholder="Répétez le mot de passe"
+              type="password"
+              autoComplete="new-password"
+            />
+          )}
+          {error && <div className="form-error">{error}</div>}
+          <button className="button primary wide" disabled={busy}>
+            {busy
+              ? "Vérification…"
+              : mode === "setup"
+                ? "Créer mon espace"
+                : "Continuer"}
+            <Icon name="arrow" />
+          </button>
+          <div className="secure-note">
+            <Icon name="lock" size={15} />
+            <span>
+              <strong>Protection locale</strong>PaieMaroc ne transmet jamais
+              votre mot de passe.
+            </span>
+          </div>
+        </form>
+      </main>
+    </div>
+  );
+}
+
+function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
+  const [route, setRoute] = useState<Route>("overview"),
+    [periods, setPeriods] = useState<Period[]>([]),
+    [activePeriod, setActivePeriod] = useState(""),
+    [employees, setEmployees] = useState<Employee[]>([]),
+    [batch, setBatch] = useState<Batch>(blankBatch),
+    [loading, setLoading] = useState(true),
+    [message, setMessage] = useState("Données privées · stockage local"),
+    [editing, setEditing] = useState<Employee | null>(null),
+    [periodDialog, setPeriodDialog] = useState(false),
+    [refresh, setRefresh] = useState(0);
+  const period = periods.find((item) => item.period === activePeriod),
+    canEdit = period?.status === "draft";
+  async function loadPeriods(select?: string) {
+    if (!isNative) {
+      const demo = [
+        {
+          period: "2026-10",
+          status: "draft",
+          copiedFrom: "2026-09",
+          employeeCount: 3,
+          grossCentimes: 2980000,
+          createdAt: "",
+          closedAt: "",
+        },
+      ];
+      setPeriods(demo);
+      setActivePeriod("2026-10");
+      return;
+    }
+    const result = (await ListPeriods()) as Period[];
+    setPeriods(result);
+    setActivePeriod(select || activePeriod || result[0]?.period || "");
+  }
+  useEffect(() => {
+    loadPeriods()
+      .catch((error) => setMessage(friendlyError(error)))
+      .finally(() => setLoading(false));
+  }, []);
+  useEffect(() => {
+    if (!activePeriod) {
+      setEmployees([]);
+      setBatch(blankBatch);
+      return;
+    }
+    const load = async () => {
+      const list = !isNative
+        ? demoEmployees
+        : ((await ListPeriodEmployees(activePeriod, "", "", 200))
+            .items as Employee[]);
+      setEmployees(list);
+      if (!list.length) {
+        setBatch(blankBatch);
+        return;
+      }
+      try {
+        setBatch(
+          (isNative
+            ? await CalculatePayroll(list as never)
+            : localCalc(list)) as Batch,
+        );
+      } catch (error) {
+        setMessage(friendlyError(error));
+        setBatch(localCalc(list));
+      }
+    };
+    load().catch((error) => setMessage(friendlyError(error)));
+  }, [activePeriod, refresh]);
+  async function saveEmployee(employee: Employee) {
+    if (!activePeriod || !canEdit) return;
+    try {
+      if (isNative) await SavePeriodEmployee(activePeriod, employee as never);
+      setEmployees((current) =>
+        current.some((item) => item.id === employee.id)
+          ? current.map((item) => (item.id === employee.id ? employee : item))
+          : [...current, employee],
+      );
+      await loadPeriods(activePeriod);
+      setRefresh((value) => value + 1);
+      setMessage(
+        `${employee.firstName} ${employee.lastName} enregistré·e dans ${activePeriod}`,
+      );
+      setEditing(null);
+    } catch (error) {
+      setMessage(friendlyError(error));
+    }
+  }
+  async function createPeriod(value: string, copyFrom: string) {
+    try {
+      if (isNative) await CreatePeriod({ period: value, copyFrom } as never);
+      await loadPeriods(value);
+      setPeriodDialog(false);
+      setMessage(
+        copyFrom
+          ? `Paie ${value} créée à partir de ${copyFrom}`
+          : `Paie ${value} créée`,
+      );
+    } catch (error) {
+      setMessage(friendlyError(error));
+    }
+  }
+  async function close() {
+    if (!period) return;
+    try {
+      if (isNative) await ClosePeriod(period.period);
+      await loadPeriods(period.period);
+      setMessage(`Paie ${period.period} clôturée`);
+    } catch (error) {
+      setMessage(friendlyError(error));
+    }
+  }
+  async function reopen() {
+    if (!period) return;
+    try {
+      if (isNative) await ReopenPeriod(period.period);
+      await loadPeriods(period.period);
+      setMessage(`Paie ${period.period} rouverte`);
+    } catch (error) {
+      setMessage(friendlyError(error));
+    }
+  }
+  async function removePeriod() {
+    if (
+      !period ||
+      !confirm(`Supprimer définitivement la paie ${period.period} ?`)
+    )
+      return;
+    try {
+      if (isNative) await DeletePeriod(period.period);
+      setActivePeriod("");
+      await loadPeriods();
+      setMessage(`Paie ${period.period} supprimée`);
+    } catch (error) {
+      setMessage(friendlyError(error));
+    }
+  }
+  const nav: [Route, string, string][] = [
+    ["overview", "Vue d’ensemble", "grid"],
+    ["employees", "Collaborateurs", "users"],
+    ["payroll", "Préparer la paie", "calc"],
+    ["periods", "Mois & clôtures", "calendar"],
+    ["cnss", "Déclaration CNSS", "shield"],
+    ["exports", "Exports bancaires", "send"],
+    ["devices", "Pointeuses ZKTeco", "device"],
+  ];
+  if (user.role === "admin")
+    nav.push(["access", "Accès & utilisateurs", "key"]);
+  const activeLabel = nav.find((item) => item[0] === route)?.[1] || "";
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <Brand />
+        <nav>
+          {nav.map(([value, label, icon]) => (
+            <button
+              key={value}
+              className={route === value ? "active" : ""}
+              onClick={() => setRoute(value)}
+            >
+              <Icon name={icon} />
+              <span>{label}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-bottom">
+          <div className="local-pill">
+            <Icon name="lock" />
+            <span>
+              <strong>Base locale</strong>
+              <small>Droits actifs</small>
+            </span>
+          </div>
+          <button className="account" onClick={onLogout}>
+            <b>{initials(user.displayName)}</b>
+            <span>
+              <strong>{user.displayName}</strong>
+              <small>{roleName(user.role)}</small>
+            </span>
+            <Icon name="logout" />
+          </button>
+        </div>
+      </aside>
+      <main className="app-main">
+        <header className="topbar">
+          <div>
+            <span>PaieMaroc</span>
+            <i>/</i>
+            <strong>{activeLabel}</strong>
+          </div>
+          <div className="top-actions">
+            <span className="status-dot">
+              <i />
+              Enregistré
+            </span>
+            <select
+              value={activePeriod}
+              onChange={(event) => setActivePeriod(event.target.value)}
+            >
+              <option value="">Choisir une période</option>
+              {periods.map((item) => (
+                <option key={item.period} value={item.period}>
+                  {item.period} ·{" "}
+                  {item.status === "closed" ? "Clôturée" : "Brouillon"}
+                </option>
+              ))}
+            </select>
+            <button
+              className="button primary"
+              onClick={() => setPeriodDialog(true)}
+            >
+              <Icon name="plus" />
+              Nouveau mois
+            </button>
+          </div>
+        </header>
+        <div className="workspace">
+          {loading ? (
+            <div className="panel loading">
+              <span className="spinner" />
+              Chargement…
+            </div>
+          ) : route === "access" ? (
+            <AccessPage current={user} notify={setMessage} />
+          ) : route === "devices" ? (
+            <DevicesPage employees={employees} notify={setMessage} />
+          ) : route === "periods" ? (
+            <PeriodsPage
+              periods={periods}
+              active={activePeriod}
+              select={setActivePeriod}
+              create={() => setPeriodDialog(true)}
+              reopen={reopen}
+              remove={removePeriod}
+            />
+          ) : (
+            <PayrollPage
+              route={route}
+              period={period}
+              employees={employees}
+              batch={batch}
+              canEdit={Boolean(canEdit)}
+              edit={setEditing}
+              close={close}
+              reopen={reopen}
+              notify={setMessage}
+              imported={() => {
+                setRefresh((value) => value + 1);
+                loadPeriods(activePeriod).catch((error) =>
+                  setMessage(friendlyError(error)),
+                );
+              }}
+            />
+          )}
+          <footer className="statusbar">
+            <span>
+              <Icon name="database" size={14} />
+              SQLite WAL · pagination bornée · calcul Go
+            </span>
+            <strong>{message}</strong>
+          </footer>
+        </div>
+      </main>
+      {editing && (
+        <EmployeeDialog
+          value={editing}
+          close={() => setEditing(null)}
+          save={saveEmployee}
+        />
+      )}{" "}
+      {periodDialog && (
+        <PeriodDialog
+          periods={periods}
+          close={() => setPeriodDialog(false)}
+          create={createPeriod}
+        />
+      )}
+    </div>
+  );
+}
+
+function PayrollPage({
+  route,
+  period,
+  employees,
+  batch,
+  canEdit,
+  edit,
+  close,
+  reopen,
+  notify,
+  imported,
+}: {
+  route: Route;
+  period?: Period;
+  employees: Employee[];
+  batch: Batch;
+  canEdit: boolean;
+  edit: (value: Employee) => void;
+  close: () => void;
+  reopen: () => void;
+  notify: (value: string) => void;
+  imported: () => void;
+}) {
+  const [search, setSearch] = useState(""),
+    [busy, setBusy] = useState(false),
+    [format, setFormat] = useState("simt500");
+  const rows = useMemo(() => {
+    const query = search.toLowerCase().trim();
+    return query
+      ? batch.rows.filter((row) =>
+          `${row.employee.firstName} ${row.employee.lastName} ${row.employee.id}`
+            .toLowerCase()
+            .includes(query),
+        )
+      : batch.rows;
+  }, [batch, search]);
+  function add() {
+    if (canEdit)
+      edit({
+        id: `EMP-${String(employees.length + 1).padStart(4, "0")}`,
+        firstName: "",
+        lastName: "",
+        cin: "",
+        cnss: "",
+        rib: "",
+        daysWorked: 26,
+        dependants: 0,
+        grossCentimes: 600000,
+        exemptCentimes: 0,
+        advanceCentimes: 0,
+      });
+  }
+  async function validate() {
+    setBusy(true);
+    try {
+      const issues = isNative ? await ValidatePayroll(employees as never) : [];
+      notify(
+        issues.length
+          ? `${issues.length} anomalie(s) à corriger`
+          : `${employees.length} salariés contrôlés · aucune anomalie`,
+      );
+    } catch (error) {
+      notify(friendlyError(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function importCSV() {
+    if (!period || !canEdit) return;
+    setBusy(true);
+    try {
+      if (!isNative) {
+        notify("Import CSV mensuel disponible dans l’application bureau");
+        return;
+      }
+      const result = await ImportEmployeesCSVToPeriod(period.period);
+      notify(
+        `${result.imported.toLocaleString("fr")} salarié(s) importé(s) · ${result.rejected} rejet(s)`,
+      );
+      imported();
+    } catch (error) {
+      notify(friendlyError(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function cnss() {
+    setBusy(true);
+    try {
+      if (!isNative) {
+        notify("Assistant e-BDS disponible dans l’application bureau");
+        return;
+      }
+      const result = await GenerateCNSSBDS();
+      notify(
+        `BDS généré · ${result.employeeCount} salariés · ${result.entrantCount} entrant(s)`,
+      );
+    } catch (error) {
+      notify(friendlyError(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function exportFile() {
+    if (!period) return;
+    setBusy(true);
+    const input = {
+      format,
+      company: {
+        name: "Mon entreprise",
+        affiliateCnss: "1773341",
+        rib: "011780000000000000000123",
+        participant: "011",
+      },
+      employees,
+      period: period.period,
+      executionDate: `${period.period}-28`,
+      batchNumber: 1,
+    };
+    try {
+      if (!isNative) {
+        notify(`Aperçu ${format.toUpperCase()} prêt`);
+        return;
+      }
+      const preview = await PreviewExport(input as never);
+      notify(`${preview.name} contrôlé · ${money(preview.totalCentimes)}`);
+      await SaveExport(input as never);
+    } catch (error) {
+      notify(friendlyError(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (!period) return <EmptyState />;
+  const active = period.period;
+  return (
+    <>
+      <div className="page-title">
+        <div>
+          <span className="eyebrow">PAIE MENSUELLE · {active}</span>
+          <h1>
+            {route === "overview"
+              ? `Votre paie ${active} est prête à avancer.`
+              : route === "employees"
+                ? "Collaborateurs"
+                : route === "cnss"
+                  ? "Déclaration e-BDS"
+                  : route === "exports"
+                    ? "Exports bancaires"
+                    : "Préparer la paie"}
+          </h1>
+          <p>
+            {period.status === "closed"
+              ? "Cette période est clôturée. Rouvrez-la pour apporter une correction."
+              : "Les modifications sont enregistrées uniquement dans ce mois."}
+          </p>
+        </div>
+        <div>
+          {period.status === "closed" ? (
+            <button className="button secondary" onClick={reopen}>
+              Rouvrir la période
+            </button>
+          ) : (
+            <>
+              <button
+                className="button secondary"
+                onClick={validate}
+                disabled={busy}
+              >
+                Contrôler
+              </button>
+              <button className="button primary" onClick={close}>
+                Clôturer le mois
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      {period.status === "closed" && (
+        <div className="banner violet">
+          <Icon name="lock" />
+          <div>
+            <strong>Période clôturée</strong>
+            <small>
+              Les exports restent accessibles; toute modification exige une
+              réouverture.
+            </small>
+          </div>
+        </div>
+      )}
+      <div className="metrics">
+        <Metric
+          label="NET À PAYER"
+          value={money(batch.netTotalCentimes)}
+          detail="Virements du mois"
+          tone="violet"
+          icon="send"
+        />
+        <Metric
+          label="MASSE SALARIALE"
+          value={money(batch.grossTotalCentimes)}
+          detail="Brut mensuel"
+          tone="blue"
+          icon="calc"
+        />
+        <Metric
+          label="CHARGES EMPLOYEUR"
+          value={money(batch.employerChargesTotal)}
+          detail="CNSS · AMO · AF · TFP"
+          tone="amber"
+          icon="shield"
+        />
+        <Metric
+          label="COLLABORATEURS"
+          value={String(period.employeeCount || employees.length)}
+          detail={`${employees.length} chargé(s) à l’écran`}
+          tone="green"
+          icon="users"
+        />
+      </div>
+      {route === "cnss" ? (
+        <ActionPanel
+          icon="shield"
+          title="Générer la déclaration e-BDS"
+          text="Chargez le préétabli CNSS et le CSV mensuel. PaieMaroc contrôle les entrants B04 et les totaux B00–B06."
+          button="Ouvrir l’assistant CNSS"
+          action={cnss}
+          busy={busy}
+        />
+      ) : route === "exports" ? (
+        <section className="panel export-panel">
+          <div>
+            <span className="action-icon">
+              <Icon name="send" />
+            </span>
+            <div>
+              <h2>Remise bancaire</h2>
+              <p>Choisissez uniquement le format confirmé par votre banque.</p>
+            </div>
+          </div>
+          <div className="format-picker">
+            {[
+              ["simt500", "SIMT 500"],
+              ["csv", "CSV universel"],
+              ["iso20022", "ISO 20022"],
+            ].map((item) => (
+              <button
+                key={item[0]}
+                className={format === item[0] ? "selected" : ""}
+                onClick={() => setFormat(item[0])}
+              >
+                <i />
+                {item[1]}
+              </button>
+            ))}
+          </div>
+          <button
+            className="button primary"
+            onClick={exportFile}
+            disabled={busy}
+          >
+            Contrôler et exporter
+            <Icon name="arrow" />
+          </button>
+        </section>
+      ) : (
+        <>
+          <section className="panel table-panel">
+            <div className="panel-head">
+              <div>
+                <h2>Paie de {active}</h2>
+                <p>Une fiche salarié, des valeurs mensuelles indépendantes.</p>
+              </div>
+              <div className="table-actions">
+                <label className="search">
+                  <Icon name="search" />
+                  <input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Rechercher un salarié"
+                  />
+                </label>
+                <button
+                  className="button secondary"
+                  onClick={importCSV}
+                  disabled={!canEdit || busy}
+                >
+                  <Icon name="database" />
+                  Importer CSV
+                </button>
+                <button
+                  className="button primary"
+                  onClick={add}
+                  disabled={!canEdit}
+                >
+                  <Icon name="plus" />
+                  Ajouter
+                </button>
+              </div>
+            </div>
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>COLLABORATEUR</th>
+                    <th>JOURS</th>
+                    <th>BRUT</th>
+                    <th>RETENUES</th>
+                    <th>NET</th>
+                    <th>ÉTAT</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr key={row.employee.id}>
+                      <td>
+                        <b className="avatar">
+                          {initials(
+                            `${row.employee.firstName} ${row.employee.lastName}`,
+                          )}
+                        </b>
+                        <span>
+                          <strong>
+                            {row.employee.firstName} {row.employee.lastName}
+                          </strong>
+                          <small>
+                            {row.employee.id} · CNSS {row.employee.cnss}
+                          </small>
+                        </span>
+                      </td>
+                      <td>{row.employee.daysWorked}</td>
+                      <td>{money(row.employee.grossCentimes)}</td>
+                      <td className="negative">
+                        −{" "}
+                        {money(
+                          row.employeeCnss +
+                            row.employeeAmo +
+                            row.incomeTax +
+                            row.employee.advanceCentimes,
+                        )}
+                      </td>
+                      <td>
+                        <strong>{money(row.netPay)}</strong>
+                      </td>
+                      <td>
+                        <em className="badge success">
+                          <i />
+                          Prêt
+                        </em>
+                      </td>
+                      <td>
+                        <button
+                          className="icon-button"
+                          disabled={!canEdit}
+                          onClick={() => edit(row.employee)}
+                        >
+                          <Icon name="more" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {rows.length === 0 && (
+                <div className="empty-table">
+                  Aucun salarié dans cette période.
+                </div>
+              )}
+            </div>
+            <div className="panel-foot">
+              <span>
+                {rows.length} affiché(s) sur {period.employeeCount}
+              </span>
+              <span>Double contrôle avant clôture</span>
+            </div>
+          </section>
+          <section className="flow-grid">
+            <Flow
+              number="01"
+              icon="users"
+              title="Fiches uniques"
+              text="Ajoutez chaque salarié une seule fois, puis modifiez sa fiche."
+            />
+            <Flow
+              number="02"
+              icon="calendar"
+              title="Valeurs par mois"
+              text="Salaires, jours et avances restent attachés à leur période."
+            />
+            <Flow
+              number="03"
+              icon="check"
+              title="Clôture réversible"
+              text="Contrôlez, clôturez, puis rouvrez avec un droit administrateur."
+            />
+          </section>
+        </>
+      )}
+    </>
+  );
+}
+
+function PeriodsPage({
+  periods,
+  active,
+  select,
+  create,
+  reopen,
+  remove,
+}: {
+  periods: Period[];
+  active: string;
+  select: (value: string) => void;
+  create: () => void;
+  reopen: () => void;
+  remove: () => void;
+}) {
+  const selected = periods.find((item) => item.period === active);
+  return (
+    <>
+      <div className="page-title">
+        <div>
+          <span className="eyebrow">HISTORIQUE DE PAIE</span>
+          <h1>Mois & clôtures</h1>
+          <p>
+            Revenez sur n’importe quel mois ou repartez de la paie précédente.
+          </p>
+        </div>
+        <button className="button primary" onClick={create}>
+          <Icon name="plus" />
+          Nouveau mois
+        </button>
+      </div>
+      <section className="period-layout">
+        <div className="panel period-list">
+          {periods.map((item) => (
+            <button
+              key={item.period}
+              className={item.period === active ? "selected" : ""}
+              onClick={() => select(item.period)}
+            >
+              <span className="period-icon">
+                <Icon name="calendar" />
+              </span>
+              <span>
+                <strong>{item.period}</strong>
+                <small>
+                  {item.copiedFrom
+                    ? `Repris depuis ${item.copiedFrom}`
+                    : "Créé depuis le référentiel"}
+                </small>
+              </span>
+              <em
+                className={`badge ${item.status === "closed" ? "neutral" : "success"}`}
+              >
+                {item.status === "closed" ? "Clôturée" : "Brouillon"}
+              </em>
+              <b>{money(item.grossCentimes)}</b>
+            </button>
+          ))}
+        </div>
+        {selected && (
+          <aside className="panel period-detail">
+            <span className="eyebrow">PÉRIODE SÉLECTIONNÉE</span>
+            <h2>{selected.period}</h2>
+            <dl>
+              <div>
+                <dt>État</dt>
+                <dd>
+                  {selected.status === "closed" ? "Clôturée" : "Brouillon"}
+                </dd>
+              </div>
+              <div>
+                <dt>Salariés</dt>
+                <dd>{selected.employeeCount}</dd>
+              </div>
+              <div>
+                <dt>Masse brute</dt>
+                <dd>{money(selected.grossCentimes)}</dd>
+              </div>
+              <div>
+                <dt>Source</dt>
+                <dd>{selected.copiedFrom || "Référentiel"}</dd>
+              </div>
+            </dl>
+            {selected.status === "closed" && (
+              <button className="button secondary wide" onClick={reopen}>
+                Rouvrir pour modifier
+              </button>
+            )}
+            <button className="button danger wide" onClick={remove}>
+              <Icon name="trash" />
+              Supprimer ce mois
+            </button>
+            <p className="danger-note">
+              La suppression efface uniquement cette paie mensuelle, jamais les
+              fiches salariés.
+            </p>
+          </aside>
+        )}
+      </section>
+    </>
+  );
+}
+
+function AccessPage({
+  current,
+  notify,
+}: {
+  current: User;
+  notify: (value: string) => void;
+}) {
+  const [users, setUsers] = useState<User[]>([]),
+    [displayName, setDisplayName] = useState(""),
+    [username, setUsername] = useState(""),
+    [password, setPassword] = useState(""),
+    [role, setRole] = useState("manager"),
+    [reset, setReset] = useState<User | null>(null),
+    [resetPassword, setResetPassword] = useState("");
+  const load = () =>
+    isNative
+      ? ListUsers().then((value) => setUsers(value as User[]))
+      : Promise.resolve(
+          setUsers([
+            demoUser,
+            {
+              ...demoUser,
+              id: 2,
+              username: "salma.rh",
+              displayName: "Salma RH",
+              role: "manager",
+            },
+          ]),
+        );
+  useEffect(() => {
+    load().catch((error) => notify(friendlyError(error)));
+  }, []);
+  async function add(event: FormEvent) {
+    event.preventDefault();
+    try {
+      if (isNative)
+        await CreateUser({ displayName, username, password, role } as never);
+      const created = username;
+      setDisplayName("");
+      setUsername("");
+      setPassword("");
+      await load();
+      notify(`Compte ${created} créé`);
+    } catch (error) {
+      notify(friendlyError(error));
+    }
+  }
+  async function toggle(user: User) {
+    try {
+      if (isNative) await SetUserEnabled(user.id, !user.enabled);
+      await load();
+      notify(`${user.displayName} ${user.enabled ? "désactivé" : "réactivé"}`);
+    } catch (error) {
+      notify(friendlyError(error));
+    }
+  }
+  async function saveReset(event: FormEvent) {
+    event.preventDefault();
+    if (!reset) return;
+    try {
+      if (isNative) await ResetUserPassword(reset.id, resetPassword);
+      notify(`Mot de passe de ${reset.displayName} réinitialisé`);
+      setReset(null);
+      setResetPassword("");
+    } catch (error) {
+      notify(friendlyError(error));
+    }
+  }
+  return (
+    <>
+      <div className="page-title">
+        <div>
+          <span className="eyebrow">ADMINISTRATION</span>
+          <h1>Accès & utilisateurs</h1>
+          <p>
+            Donnez uniquement les droits nécessaires à chaque membre de
+            l’équipe.
+          </p>
+        </div>
+      </div>
+      <div className="access-layout">
+        <section className="panel users-panel">
+          <div className="panel-head">
+            <div>
+              <h2>Utilisateurs</h2>
+              <p>
+                {users.filter((user) => user.enabled).length} compte(s) actif(s)
+              </p>
+            </div>
+          </div>
+          {users.map((user) => (
+            <div className="user-row" key={user.id}>
+              <b className="avatar large">{initials(user.displayName)}</b>
+              <span>
+                <strong>
+                  {user.displayName}
+                  {user.id === current.id && <em>Vous</em>}
+                </strong>
+                <small>
+                  @{user.username} · {roleName(user.role)}
+                </small>
+              </span>
+              <em className={`badge ${user.enabled ? "success" : "neutral"}`}>
+                {user.enabled ? "Actif" : "Suspendu"}
+              </em>
+              <button
+                className="icon-button labeled"
+                onClick={() => setReset(user)}
+              >
+                <Icon name="key" />
+                Mot de passe
+              </button>
+              <button
+                className="button secondary small"
+                disabled={user.id === current.id}
+                onClick={() => toggle(user)}
+              >
+                {user.enabled ? "Désactiver" : "Réactiver"}
+              </button>
+            </div>
+          ))}
+        </section>
+        <form className="panel invite-card" onSubmit={add}>
+          <span className="eyebrow">NOUVEL ACCÈS</span>
+          <h2>Ajouter un utilisateur</h2>
+          <p>
+            Le mot de passe temporaire est communiqué hors de l’application.
+          </p>
+          <TextField
+            label="Nom complet"
+            value={displayName}
+            set={setDisplayName}
+            placeholder="Salma Alaoui"
+          />
+          <TextField
+            label="Identifiant"
+            value={username}
+            set={setUsername}
+            placeholder="salma.rh"
+          />
+          <TextField
+            label="Mot de passe temporaire"
+            value={password}
+            set={setPassword}
+            type="password"
+            placeholder="12 caractères minimum"
+          />
+          <label className="field">
+            Rôle
+            <select
+              value={role}
+              onChange={(event) => setRole(event.target.value)}
+            >
+              <option value="manager">Gestionnaire paie</option>
+              <option value="admin">Administrateur</option>
+            </select>
+          </label>
+          <button className="button primary wide">
+            Créer le compte
+            <Icon name="arrow" />
+          </button>
+        </form>
+      </div>
+      {reset && (
+        <div className="backdrop">
+          <form className="dialog compact" onSubmit={saveReset}>
+            <DialogHead
+              eyebrow="SÉCURITÉ"
+              title={`Réinitialiser ${reset.displayName}`}
+              close={() => setReset(null)}
+            />
+            <TextField
+              label="Nouveau mot de passe"
+              value={resetPassword}
+              set={setResetPassword}
+              type="password"
+              placeholder="12 caractères minimum"
+            />
+            <div className="dialog-actions">
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => setReset(null)}
+              >
+                Annuler
+              </button>
+              <button className="button primary">Mettre à jour</button>
+            </div>
+          </form>
+        </div>
+      )}
+    </>
+  );
+}
+
+function DevicesPage({
+  employees,
+  notify,
+}: {
+  employees: Employee[];
+  notify: (value: string) => void;
+}) {
+  const [devices, setDevices] = useState<Device[]>([]),
+    [editing, setEditing] = useState<Device>(blankDevice),
+    [profile, setProfile] = useState<{
+      authentication: string[];
+      faceCapacity: number;
+      fingerCapacity: number;
+      maxEvents: number;
+    } | null>(null),
+    [testing, setTesting] = useState(false),
+    [linkEmployee, setLinkEmployee] = useState(""),
+    [deviceUserID, setDeviceUserID] = useState("");
+  const load = () =>
+    isNative
+      ? ListAttendanceDevices().then((value) => setDevices(value as Device[]))
+      : Promise.resolve(
+          setDevices([
+            { ...blankDevice, id: 1, lastStatus: "online", linkedUsers: 3 },
+          ]),
+        );
+  useEffect(() => {
+    load().catch((error) => notify(friendlyError(error)));
+    if (isNative)
+      AttendanceProfiles().then((value) => setProfile(value[0] || null));
+    else
+      setProfile({
+        authentication: ["visage", "empreinte", "badge optionnel"],
+        faceCapacity: 100,
+        fingerCapacity: 500,
+        maxEvents: 50000,
+      });
+  }, []);
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    try {
+      const saved = isNative
+        ? await SaveAttendanceDevice(editing as never)
+        : { ...editing, id: editing.id || 2 };
+      setEditing(saved as Device);
+      await load();
+      notify(`${saved.name} enregistrée`);
+    } catch (error) {
+      notify(friendlyError(error));
+    }
+  }
+  async function test() {
+    setTesting(true);
+    try {
+      if (!isNative) {
+        notify("MB10-VL joignable · 4 ms");
+        return;
+      }
+      const result = await TestAttendanceDevice(editing as never);
+      notify(`${result.message} ${result.latencyMs} ms`);
+      await load();
+    } catch (error) {
+      notify(friendlyError(error));
+    } finally {
+      setTesting(false);
+    }
+  }
+  async function link(event: FormEvent) {
+    event.preventDefault();
+    try {
+      if (isNative)
+        await LinkAttendanceEmployee(editing.id, linkEmployee, deviceUserID);
+      notify(
+        `Identifiant ZKTeco ${deviceUserID} lié au salarié ${linkEmployee}`,
+      );
+      setLinkEmployee("");
+      setDeviceUserID("");
+      await load();
+    } catch (error) {
+      notify(friendlyError(error));
+    }
+  }
+  return (
+    <>
+      <div className="page-title">
+        <div>
+          <span className="eyebrow">TEMPS & PRÉSENCE</span>
+          <h1>Pointeuses ZKTeco</h1>
+          <p>
+            Connectez plusieurs terminaux sans copier les empreintes ni les
+            visages dans PaieMaroc.
+          </p>
+        </div>
+        <button
+          className="button primary"
+          onClick={() => setEditing({ ...blankDevice })}
+        >
+          <Icon name="plus" />
+          Ajouter une pointeuse
+        </button>
+      </div>
+      <div className="banner blue">
+        <Icon name="shield" />
+        <div>
+          <strong>Profil prioritaire MB10-VL</strong>
+          <small>
+            TCP/IP · ADMS · visage · empreinte · badge optionnel. Détection
+            réseau avant synchronisation.
+          </small>
+        </div>
+      </div>
+      <div className="device-layout">
+        <section className="panel device-list">
+          <div className="panel-head">
+            <div>
+              <h2>Terminaux</h2>
+              <p>{devices.length} pointeuse(s) configurée(s)</p>
+            </div>
+          </div>
+          {devices.map((device) => (
+            <button
+              key={device.id}
+              className={editing.id === device.id ? "selected" : ""}
+              onClick={() => setEditing(device)}
+            >
+              <span className="device-symbol">
+                <Icon name="device" />
+              </span>
+              <span>
+                <strong>{device.name}</strong>
+                <small>
+                  {device.model} · {device.host}:{device.port}
+                </small>
+              </span>
+              <em
+                className={`badge ${device.lastStatus === "online" ? "success" : "neutral"}`}
+              >
+                <i />
+                {device.lastStatus === "online"
+                  ? "En ligne"
+                  : device.lastStatus === "offline"
+                    ? "Hors ligne"
+                    : "À tester"}
+              </em>
+              <b>{device.linkedUsers} lié(s)</b>
+            </button>
+          ))}
+        </section>
+        <form className="panel device-form" onSubmit={save}>
+          <span className="eyebrow">CONFIGURATION</span>
+          <h2>{editing.id ? "Modifier la pointeuse" : "Nouvelle pointeuse"}</h2>
+          <div className="form-grid">
+            <TextField
+              label="Nom"
+              value={editing.name}
+              set={(value) => setEditing({ ...editing, name: value })}
+            />
+            <TextField
+              label="Modèle"
+              value={editing.model}
+              set={(value) => setEditing({ ...editing, model: value })}
+            />
+            <label className="field">
+              Mode de connexion
+              <select
+                value={editing.protocol}
+                onChange={(event) =>
+                  setEditing({ ...editing, protocol: event.target.value })
+                }
+              >
+                <option value="standalone">Standalone TCP/IP</option>
+                <option value="adms">PUSH / ADMS</option>
+                <option value="biotime">API ZKBio Time</option>
+              </select>
+            </label>
+            <TextField
+              label="Adresse IP / hôte"
+              value={editing.host}
+              set={(value) => setEditing({ ...editing, host: value })}
+            />
+            <TextField
+              label="Port"
+              value={String(editing.port)}
+              set={(value) => setEditing({ ...editing, port: Number(value) })}
+            />
+          </div>
+          <div className="device-capabilities">
+            <span>
+              <Icon name="users" />
+              <strong>{profile?.faceCapacity || 100}</strong> visages
+            </span>
+            <span>
+              <Icon name="users" />
+              <strong>{profile?.fingerCapacity || 500}</strong> empreintes
+            </span>
+            <span>
+              <Icon name="clock" />
+              <strong>
+                {(profile?.maxEvents || 50000).toLocaleString("fr")}
+              </strong>{" "}
+              événements
+            </span>
+            <span>
+              <Icon name="shield" />
+              <strong>
+                {profile?.authentication.join(" · ") || "Visage · empreinte"}
+              </strong>
+            </span>
+          </div>
+          <div className="dialog-actions split">
+            <button
+              type="button"
+              className="button secondary"
+              onClick={test}
+              disabled={testing}
+            >
+              {testing ? "Test…" : "Tester la connexion"}
+            </button>
+            <button className="button primary">
+              Enregistrer
+              <Icon name="arrow" />
+            </button>
+          </div>
+          {editing.id > 0 && (
+            <div className="link-form">
+              <div>
+                <strong>Lier un salarié</strong>
+                <small>ID numérique, sans zéro initial.</small>
+              </div>
+              <select
+                value={linkEmployee}
+                onChange={(event) => setLinkEmployee(event.target.value)}
+                required
+              >
+                <option value="">Choisir…</option>
+                {employees.map((employee) => (
+                  <option key={employee.id} value={employee.id}>
+                    {employee.firstName} {employee.lastName}
+                  </option>
+                ))}
+              </select>
+              <input
+                value={deviceUserID}
+                onChange={(event) => setDeviceUserID(event.target.value)}
+                placeholder="ID ZKTeco"
+                required
+              />
+              <button
+                type="button"
+                className="button secondary"
+                onClick={(event) => link(event as unknown as FormEvent)}
+              >
+                Lier
+              </button>
+            </div>
+          )}
+        </form>
+      </div>
+      <section className="panel protocol-note">
+        <Icon name="database" />
+        <div>
+          <strong>Compatibilité par adaptateurs</strong>
+          <p>
+            MB10-VL : Standalone/ADMS. Autres familles : PUSH/ADMS ou ZKBio Time
+            selon le firmware. Les gabarits biométriques ne quittent jamais la
+            pointeuse.
+          </p>
+        </div>
+      </section>
+    </>
+  );
+}
+
+function EmployeeDialog({
+  value,
+  close,
+  save,
+}: {
+  value: Employee;
+  close: () => void;
+  save: (value: Employee) => void;
+}) {
+  const [employee, setEmployee] = useState(value);
+  return (
+    <div className="backdrop" onMouseDown={close}>
+      <form
+        className="dialog"
+        onMouseDown={(event) => event.stopPropagation()}
+        onSubmit={(event) => {
+          event.preventDefault();
+          save(employee);
+        }}
+      >
+        <DialogHead
+          eyebrow="FICHE UNIQUE"
+          title={
+            employee.firstName
+              ? `${employee.firstName} ${employee.lastName}`
+              : "Nouveau collaborateur"
+          }
+          close={close}
+        />
+        <div className="form-grid two">
+          <TextField
+            label="Prénom"
+            value={employee.firstName}
+            set={(firstName) => setEmployee({ ...employee, firstName })}
+          />
+          <TextField
+            label="Nom"
+            value={employee.lastName}
+            set={(lastName) => setEmployee({ ...employee, lastName })}
+          />
+          <TextField
+            label="Matricule unique"
+            value={employee.id}
+            set={(id) => setEmployee({ ...employee, id })}
+            readOnly={Boolean(value.firstName)}
+          />
+          <TextField
+            label="CIN"
+            value={employee.cin}
+            set={(cin) => setEmployee({ ...employee, cin: cin.toUpperCase() })}
+          />
+          <TextField
+            label="N° CNSS"
+            value={employee.cnss}
+            set={(cnss) => setEmployee({ ...employee, cnss })}
+          />
+          <TextField
+            label="Jours ce mois"
+            value={String(employee.daysWorked)}
+            set={(daysWorked) =>
+              setEmployee({ ...employee, daysWorked: Number(daysWorked) })
+            }
+          />
+          <div className="span-two">
+            <TextField
+              label="RIB marocain · 24 chiffres"
+              value={employee.rib}
+              set={(rib) => setEmployee({ ...employee, rib })}
+            />
+          </div>
+          <TextField
+            label="Salaire brut ce mois (MAD)"
+            value={String(employee.grossCentimes / 100)}
+            set={(value) =>
+              setEmployee({
+                ...employee,
+                grossCentimes: Math.round(Number(value) * 100),
+              })
+            }
+          />
+          <TextField
+            label="Avance ce mois (MAD)"
+            value={String(employee.advanceCentimes / 100)}
+            set={(value) =>
+              setEmployee({
+                ...employee,
+                advanceCentimes: Math.round(Number(value) * 100),
+              })
+            }
+          />
+        </div>
+        <div className="secure-note">
+          <Icon name="calendar" />
+          <span>
+            <strong>Flux mensuel</strong>L’identité est mise à jour une seule
+            fois; les montants restent liés au mois actif.
+          </span>
+        </div>
+        <div className="dialog-actions">
+          <button type="button" className="button secondary" onClick={close}>
+            Annuler
+          </button>
+          <button className="button primary">Enregistrer</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+function PeriodDialog({
+  periods,
+  close,
+  create,
+}: {
+  periods: Period[];
+  close: () => void;
+  create: (period: string, copy: string) => void;
+}) {
+  const now = new Date(),
+    suggested = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
+    [period, setPeriod] = useState(suggested),
+    [source, setSource] = useState(periods[0]?.period || "");
+  return (
+    <div className="backdrop">
+      <form
+        className="dialog compact"
+        onSubmit={(event) => {
+          event.preventDefault();
+          create(period, source);
+        }}
+      >
+        <DialogHead
+          eyebrow="NOUVELLE PAIE"
+          title="Créer un mois"
+          close={close}
+        />
+        <TextField
+          label="Période"
+          value={period}
+          set={setPeriod}
+          type="month"
+        />
+        <label className="field">
+          Reprendre les salaires de
+          <select
+            value={source}
+            onChange={(event) => setSource(event.target.value)}
+          >
+            <option value="">Aucun mois · valeurs du référentiel</option>
+            {periods.map((item) => (
+              <option key={item.period} value={item.period}>
+                {item.period}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="banner mini">
+          <Icon name="check" />
+          <div>
+            <strong>Reprise intelligente</strong>
+            <small>
+              Salaires et jours sont copiés; les avances repartent à zéro.
+            </small>
+          </div>
+        </div>
+        <div className="dialog-actions">
+          <button type="button" className="button secondary" onClick={close}>
+            Annuler
+          </button>
+          <button className="button primary">Créer la période</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+function Metric({
+  label,
+  value,
+  detail,
+  tone,
+  icon,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  tone: string;
+  icon: string;
+}) {
+  return (
+    <article className="panel metric">
+      <div>
+        <span>{label}</span>
+        <i className={tone}>
+          <Icon name={icon} />
+        </i>
+      </div>
+      <strong>{value}</strong>
+      <small>{detail}</small>
+    </article>
+  );
+}
+function Flow({
+  number,
+  icon,
+  title,
+  text,
+}: {
+  number: string;
+  icon: string;
+  title: string;
+  text: string;
+}) {
+  return (
+    <div className="panel flow-card">
+      <span>{number}</span>
+      <Icon name={icon} />
+      <h3>{title}</h3>
+      <p>{text}</p>
+    </div>
+  );
+}
+function TextField({
+  label,
+  value,
+  set,
+  placeholder = "",
+  type = "text",
+  autoComplete,
+  readOnly = false,
+}: {
+  label: string;
+  value: string;
+  set: (value: string) => void;
+  placeholder?: string;
+  type?: string;
+  autoComplete?: string;
+  readOnly?: boolean;
+}) {
+  return (
+    <label className="field">
+      {label}
+      <input
+        type={type}
+        value={value}
+        onChange={(event) => set(event.target.value)}
+        placeholder={placeholder}
+        autoComplete={autoComplete}
+        readOnly={readOnly}
+        required
+      />
+    </label>
+  );
+}
+function DialogHead({
+  eyebrow,
+  title,
+  close,
+}: {
+  eyebrow: string;
+  title: string;
+  close: () => void;
+}) {
+  return (
+    <div className="dialog-head">
+      <div>
+        <span className="eyebrow">{eyebrow}</span>
+        <h2>{title}</h2>
+      </div>
+      <button type="button" onClick={close}>
+        ×
+      </button>
+    </div>
+  );
+}
+function ActionPanel({
+  icon,
+  title,
+  text,
+  button,
+  action,
+  busy,
+}: {
+  icon: string;
+  title: string;
+  text: string;
+  button: string;
+  action: () => void;
+  busy: boolean;
+}) {
+  return (
+    <section className="panel action-panel">
+      <span className="action-icon">
+        <Icon name={icon} />
+      </span>
+      <div>
+        <h2>{title}</h2>
+        <p>{text}</p>
+      </div>
+      <button className="button primary" onClick={action} disabled={busy}>
+        {busy ? "Traitement…" : button}
+        <Icon name="arrow" />
+      </button>
+    </section>
+  );
+}
+function EmptyState() {
+  return (
+    <section className="panel empty-state">
+      <span>
+        <Icon name="calendar" size={26} />
+      </span>
+      <h2>Commencez par créer un mois de paie</h2>
+      <p>
+        Chaque mois garde ses propres salaires, jours, avances et état de
+        clôture.
+      </p>
+      <button
+        className="button primary"
+        onClick={() =>
+          document
+            .querySelector<HTMLButtonElement>(".top-actions .primary")
+            ?.click()
+        }
+      >
+        Créer un mois
+        <Icon name="arrow" />
+      </button>
+    </section>
+  );
+}
+function Brand({ light = false }: { light?: boolean }) {
+  return (
+    <div className={`brand ${light ? "light" : ""}`}>
+      <b>M</b>
+      <span>
+        <strong>PaieMaroc</strong>
+        <small>PAIE · CNSS · RH</small>
+      </span>
+    </div>
+  );
+}
+function CenteredError({ message }: { message: string }) {
+  return (
+    <div className="boot error">
+      <Brand />
+      <h1>Impossible d’ouvrir PaieMaroc</h1>
+      <p>{message}</p>
+    </div>
+  );
+}

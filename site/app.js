@@ -1,4 +1,4 @@
-const repository = 'Niceblueman/PaieMaroc';
+const repository = 'kmoz000/PaieMaroc';
 const fallback = `https://github.com/${repository}/releases/latest`;
 
 function wantedAsset(platform, assets) {

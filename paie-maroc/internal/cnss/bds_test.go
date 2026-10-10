@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Niceblueman/PaieMaroc/paie-maroc/internal/cnss"
+	"github.com/kmoz000/PaieMaroc/paie-maroc/internal/cnss"
 )
 
 type memorySource struct {

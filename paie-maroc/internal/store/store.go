@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Niceblueman/PaieMaroc/paie-maroc/internal/payroll"
+	"github.com/kmoz000/PaieMaroc/paie-maroc/internal/payroll"
 	_ "modernc.org/sqlite"
 )
 
@@ -262,8 +262,123 @@ func (store *Store) ImportCSV(ctx context.Context, reader io.Reader) (ImportStat
 	return stats, nil
 }
 
+// ImportCSVForPeriod streams a large employee file into the unique employee
+// register and the selected draft month in bounded transactions.
+func (store *Store) ImportCSVForPeriod(ctx context.Context, period string, reader io.Reader) (ImportStats, error) {
+	startedAt := time.Now()
+	csvReader := csv.NewReader(bufio.NewReaderSize(reader, 64*1024))
+	csvReader.Comma = ';'
+	csvReader.ReuseRecord = true
+	csvReader.FieldsPerRecord = -1
+	header, err := csvReader.Read()
+	if err != nil {
+		return ImportStats{}, fmt.Errorf("lecture entête CSV: %w", err)
+	}
+	if len(header) > 0 {
+		header[0] = strings.TrimPrefix(header[0], "\uFEFF")
+	}
+	columns, err := mapColumns(header)
+	if err != nil {
+		return ImportStats{}, err
+	}
+
+	var transaction *sql.Tx
+	var employeeStatement, periodStatement *sql.Stmt
+	openBatch := func() error {
+		transaction, err = store.db.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		if err = requireDraftPeriod(ctx, transaction, period); err != nil {
+			_ = transaction.Rollback()
+			transaction = nil
+			return err
+		}
+		employeeStatement, err = transaction.PrepareContext(ctx, upsertSQL)
+		if err != nil {
+			_ = transaction.Rollback()
+			transaction = nil
+			return err
+		}
+		periodStatement, err = transaction.PrepareContext(ctx, upsertPeriodEntrySQL)
+		if err != nil {
+			_ = employeeStatement.Close()
+			_ = transaction.Rollback()
+			transaction = nil
+			return err
+		}
+		return nil
+	}
+	commitBatch := func() error {
+		if err := employeeStatement.Close(); err != nil {
+			return err
+		}
+		if err := periodStatement.Close(); err != nil {
+			return err
+		}
+		if err := transaction.Commit(); err != nil {
+			return err
+		}
+		transaction = nil
+		return nil
+	}
+	if err := openBatch(); err != nil {
+		return ImportStats{}, fmt.Errorf("début import mensuel: %w", err)
+	}
+	defer func() {
+		if transaction != nil {
+			_ = transaction.Rollback()
+		}
+	}()
+
+	stats := ImportStats{Errors: []string{}}
+	line, inBatch := 1, 0
+	for {
+		line++
+		record, readErr := csvReader.Read()
+		if errors.Is(readErr, io.EOF) {
+			break
+		}
+		if readErr != nil {
+			stats.Rejected++
+			stats.addError(fmt.Sprintf("ligne %d: %v", line, readErr))
+			continue
+		}
+		employee, parseErr := employeeFromRecord(record, columns)
+		if parseErr != nil {
+			stats.Rejected++
+			stats.addError(fmt.Sprintf("ligne %d: %v", line, parseErr))
+			continue
+		}
+		if _, err := employeeStatement.ExecContext(ctx, employeeArgs(employee)...); err != nil {
+			return stats, fmt.Errorf("import salarié ligne %d: %w", line, err)
+		}
+		if _, err := periodStatement.ExecContext(ctx, period, employee.ID, employee.DaysWorked,
+			employee.Dependants, employee.GrossCentimes, employee.ExemptCentimes, employee.AdvanceCentimes); err != nil {
+			return stats, fmt.Errorf("import paie ligne %d: %w", line, err)
+		}
+		stats.Imported++
+		inBatch++
+		if inBatch == commitEvery {
+			if err := commitBatch(); err != nil {
+				return stats, fmt.Errorf("validation lot: %w", err)
+			}
+			if err := openBatch(); err != nil {
+				return stats, fmt.Errorf("nouveau lot: %w", err)
+			}
+			inBatch = 0
+		}
+	}
+	if err := commitBatch(); err != nil {
+		return stats, fmt.Errorf("validation import: %w", err)
+	}
+	stats.DurationMS = time.Since(startedAt).Milliseconds()
+	return stats, nil
+}
+
 func (store *Store) prepare() error {
 	statements := []string{
+		`PRAGMA foreign_keys = ON`,
 		`PRAGMA journal_mode = WAL`,
 		`PRAGMA synchronous = NORMAL`,
 		`PRAGMA temp_store = FILE`,
@@ -285,6 +400,64 @@ func (store *Store) prepare() error {
 		) STRICT`,
 		`CREATE INDEX IF NOT EXISTS employees_last_name_idx ON employees(search_last_name, id)`,
 		`CREATE INDEX IF NOT EXISTS employees_cnss_idx ON employees(cnss, id)`,
+		`CREATE TABLE IF NOT EXISTS users (
+			id INTEGER PRIMARY KEY,
+			username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+			display_name TEXT NOT NULL,
+			role TEXT NOT NULL CHECK(role IN ('admin', 'manager')),
+			password_hash TEXT NOT NULL,
+			enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1)),
+			created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			last_login_at TEXT
+		) STRICT`,
+		`CREATE INDEX IF NOT EXISTS users_role_enabled_idx ON users(role, enabled)`,
+		`CREATE TABLE IF NOT EXISTS payroll_periods (
+			period TEXT PRIMARY KEY,
+			status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft', 'closed')),
+			copied_from TEXT,
+			created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			closed_at TEXT,
+			FOREIGN KEY(copied_from) REFERENCES payroll_periods(period) ON DELETE SET NULL
+		) STRICT`,
+		`CREATE TABLE IF NOT EXISTS payroll_entries (
+			period TEXT NOT NULL,
+			employee_id TEXT NOT NULL,
+			days_worked INTEGER NOT NULL,
+			dependants INTEGER NOT NULL,
+			gross_centimes INTEGER NOT NULL,
+			exempt_centimes INTEGER NOT NULL,
+			advance_centimes INTEGER NOT NULL,
+			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY(period, employee_id),
+			FOREIGN KEY(period) REFERENCES payroll_periods(period) ON DELETE CASCADE,
+			FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE RESTRICT
+		) STRICT`,
+		`CREATE INDEX IF NOT EXISTS payroll_entries_employee_idx ON payroll_entries(employee_id, period)`,
+		`CREATE TABLE IF NOT EXISTS attendance_devices (
+			id INTEGER PRIMARY KEY,
+			name TEXT NOT NULL,
+			model TEXT NOT NULL,
+			protocol TEXT NOT NULL CHECK(protocol IN ('standalone', 'adms', 'biotime')),
+			host TEXT NOT NULL,
+			port INTEGER NOT NULL CHECK(port BETWEEN 1 AND 65535),
+			enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1)),
+			last_status TEXT NOT NULL DEFAULT 'never',
+			last_checked_at TEXT,
+			created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(host, port)
+		) STRICT`,
+		`CREATE TABLE IF NOT EXISTS attendance_employee_links (
+			device_id INTEGER NOT NULL,
+			employee_id TEXT NOT NULL,
+			device_user_id TEXT NOT NULL,
+			PRIMARY KEY(device_id, employee_id),
+			UNIQUE(device_id, device_user_id),
+			FOREIGN KEY(device_id) REFERENCES attendance_devices(id) ON DELETE CASCADE,
+			FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
+		) STRICT`,
 	}
 	for _, statement := range statements {
 		if _, err := store.db.Exec(statement); err != nil {
@@ -429,6 +602,17 @@ ON CONFLICT(id) DO UPDATE SET
 	cin=excluded.cin,
 	cnss=excluded.cnss,
 	rib=excluded.rib,
+	days_worked=excluded.days_worked,
+	dependants=excluded.dependants,
+	gross_centimes=excluded.gross_centimes,
+	exempt_centimes=excluded.exempt_centimes,
+	advance_centimes=excluded.advance_centimes,
+	updated_at=CURRENT_TIMESTAMP`
+
+const upsertPeriodEntrySQL = `INSERT INTO payroll_entries (
+	period, employee_id, days_worked, dependants, gross_centimes, exempt_centimes, advance_centimes
+) VALUES (?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(period, employee_id) DO UPDATE SET
 	days_worked=excluded.days_worked,
 	dependants=excluded.dependants,
 	gross_centimes=excluded.gross_centimes,
