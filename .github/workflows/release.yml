@@ -1,0 +1,158 @@
+name: Binaires signés
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+env:
+  WAILS_VERSION: v2.15.0
+  NODE_OPTIONS: --max-old-space-size=4096
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: windows-amd64
+          - os: macos-15
+            artifact: macos-universal
+          - os: ubuntu-24.04
+            artifact: linux-amd64
+    runs-on: ${{ matrix.os }}
+    env:
+      APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+    defaults:
+      run:
+        working-directory: paie-maroc
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.x'
+          cache-dependency-path: paie-maroc/go.sum
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: paie-maroc/frontend/package-lock.json
+      - name: Installer les dépendances Linux
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+      - name: Installer Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+      - name: Installer le frontend
+        run: npm ci
+        working-directory: paie-maroc/frontend
+      - name: Tester
+        run: go test ./...
+      - name: Compiler Windows
+        if: runner.os == 'Windows'
+        run: wails build -clean -o PaieMaroc.exe
+      - name: Compiler macOS universel
+        if: runner.os == 'macOS'
+        run: wails build -clean -platform darwin/universal -o PaieMaroc
+      - name: Compiler Linux
+        if: runner.os == 'Linux'
+        run: wails build -clean -tags webkit2_41 -o paie-maroc
+
+      - name: Importer le certificat Apple
+        if: runner.os == 'macOS' && env.APPLE_CERTIFICATE_BASE64 != ''
+        run: |
+          CERTIFICATE_PATH="$RUNNER_TEMP/certificate.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/paie-maroc.keychain-db"
+          echo "$APPLE_CERTIFICATE_BASE64" | base64 --decode > "$CERTIFICATE_PATH"
+          security create-keychain -p actions "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p actions "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s -k actions "$KEYCHAIN_PATH"
+          codesign --force --deep --options runtime --timestamp --sign "$APPLE_SIGNING_IDENTITY" build/bin/PaieMaroc.app
+          codesign --verify --deep --strict --verbose=2 build/bin/PaieMaroc.app
+      - name: Notariser macOS
+        if: runner.os == 'macOS' && env.APPLE_CERTIFICATE_BASE64 != ''
+        run: |
+          ditto -c -k --keepParent build/bin/PaieMaroc.app "$RUNNER_TEMP/PaieMaroc-notary.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/PaieMaroc-notary.zip" --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
+          xcrun stapler staple build/bin/PaieMaroc.app
+
+      - name: Signer Windows
+        if: runner.os == 'Windows' && env.WINDOWS_CERTIFICATE_BASE64 != ''
+        shell: pwsh
+        run: |
+          $certificate = Join-Path $env:RUNNER_TEMP 'certificate.pfx'
+          [IO.File]::WriteAllBytes($certificate, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
+          $signtool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Filter signtool.exe -Recurse | Where-Object FullName -Match '\\x64\\' | Select-Object -Last 1
+          & $signtool.FullName sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /f $certificate /p $env:WINDOWS_CERTIFICATE_PASSWORD build/bin/PaieMaroc.exe
+          & $signtool.FullName verify /pa /v build/bin/PaieMaroc.exe
+          Remove-Item $certificate
+
+      - name: Emballer macOS
+        if: runner.os == 'macOS'
+        env:
+          SIGNED: ${{ secrets.APPLE_CERTIFICATE_BASE64 != '' }}
+        run: |
+          suffix="UNSIGNED"
+          if [ "$SIGNED" = "true" ]; then suffix="SIGNED-NOTARIZED"; fi
+          ditto -c -k --keepParent build/bin/PaieMaroc.app "build/bin/PaieMaroc-${GITHUB_REF_NAME}-macOS-universal-${suffix}.zip"
+          rm -rf build/bin/PaieMaroc.app
+      - name: Emballer Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          SIGNED: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 != '' }}
+        run: |
+          $suffix = if ($env:SIGNED -eq 'true') { 'SIGNED' } else { 'UNSIGNED' }
+          Rename-Item build/bin/PaieMaroc.exe "PaieMaroc-$env:GITHUB_REF_NAME-Windows-amd64-$suffix.exe"
+      - name: Construire le paquet Debian
+        if: runner.os == 'Linux'
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if [ "$version" = "$GITHUB_REF_NAME" ]; then version="0.0.0-${GITHUB_RUN_NUMBER}"; fi
+          package="$RUNNER_TEMP/paie-maroc-package"
+          mkdir -p "$package/DEBIAN" "$package/usr/bin" "$package/usr/share/applications" "$package/usr/share/icons/hicolor/512x512/apps"
+          cp packaging/linux/control "$package/DEBIAN/control"
+          sed -i "s/^Version:.*/Version: $version/" "$package/DEBIAN/control"
+          cp build/bin/paie-maroc "$package/usr/bin/paie-maroc"
+          cp packaging/linux/paie-maroc.desktop "$package/usr/share/applications/paie-maroc.desktop"
+          cp build/appicon.png "$package/usr/share/icons/hicolor/512x512/apps/paie-maroc.png"
+          dpkg-deb --build --root-owner-group "$package" "build/bin/PaieMaroc-${GITHUB_REF_NAME}-Linux-amd64.deb"
+          rm build/bin/paie-maroc
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: paie-maroc/build/bin/*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Créer les sommes SHA-256
+        run: cd artifacts && sha256sum * > SHA256SUMS.txt
+      - name: Attester la provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: artifacts/*
+      - name: Publier la version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" artifacts/* --repo "${GITHUB_REPOSITORY}" --generate-notes --title "PaieMaroc ${GITHUB_REF_NAME}"

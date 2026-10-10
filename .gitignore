@@ -1,0 +1,17 @@
+.DS_Store
+*.log
+.idea/
+.vscode/
+
+# Wails / Go
+paie-maroc/build/bin/
+paie-maroc/frontend/dist/
+paie-maroc/frontend/node_modules/
+paie-maroc/coverage.out
+
+# Local payroll data and exports
+*.db
+*.db-shm
+*.db-wal
+DS_*
+PAIE_*

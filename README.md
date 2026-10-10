@@ -1,5 +1,29 @@
-# resources-humain-app
+# PaieMaroc
 
-Application de bureau libre pour préparer la paie marocaine, contrôler les données CNSS et générer des fichiers de virements de masse traçables.
+PaieMaroc est une application de bureau libre, en français, destinée aux responsables RH au Maroc. Elle calcule et contrôle la paie, conserve les données localement, prépare les déclarations CNSS e-BDS et génère des remises bancaires traçables.
 
-Le code de l’application Wails se trouve dans [`paie-maroc/`](paie-maroc/).
+[Télécharger la dernière version](https://niceblueman.github.io/PaieMaroc/) · [Voir les versions](https://github.com/Niceblueman/PaieMaroc/releases) · [Signaler un problème](https://github.com/Niceblueman/PaieMaroc/issues)
+
+## Points forts
+
+- Parcours guidé en français, avec validation avant chaque export.
+- Montants calculés en centimes entiers, jamais en virgule flottante.
+- Base SQLite locale, pagination par curseur et traitements en flux pour des volumes très importants.
+- Exports CSV, SIMT500 segmenté et ISO 20022, à confirmer avec la banque destinataire.
+- Moteur CNSS e-BDS A00–A03 vers B00–B06, y compris entrants, sorties et cas particuliers.
+- Tests unitaires des calculs, contrôles de longueur, totaux et sommes de contrôle.
+
+## Développement
+
+```bash
+cd paie-maroc
+make test
+make dev
+make build
+```
+
+Prérequis : Go 1.26, Node.js 24+ et Wails 2.15. Les règles légales et formats bancaires sont versionnés ; faites toujours valider le premier fichier par la banque et le premier BDS par la CNSS avant un envoi réel.
+
+## Licence
+
+Distribué sous licence MIT. Voir [LICENSE](LICENSE).

@@ -1,0 +1,9 @@
+Package: paie-maroc
+Version: 0.0.0
+Section: office
+Priority: optional
+Architecture: amd64
+Maintainer: PaieMaroc contributors
+Depends: libgtk-3-0, libwebkit2gtk-4.1-0
+Description: Paie et exports CNSS et bancaires pour le Maroc
+ Application de bureau locale destinée aux responsables des ressources humaines.

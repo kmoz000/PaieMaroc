@@ -1,0 +1,437 @@
+// Package store provides disk-backed employee storage for large payrolls.
+package store
+
+import (
+	"bufio"
+	"context"
+	"database/sql"
+	"encoding/csv"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/Niceblueman/PaieMaroc/paie-maroc/internal/payroll"
+	_ "modernc.org/sqlite"
+)
+
+const (
+	maxPageSize = 200
+	commitEvery = 5_000
+)
+
+// Store keeps payroll data on disk and exposes bounded pages to Wails.
+type Store struct {
+	db *sql.DB
+}
+
+type Page struct {
+	Items      []payroll.Employee `json:"items"`
+	NextCursor string             `json:"nextCursor"`
+	Total      int64              `json:"total"`
+}
+
+type ImportStats struct {
+	Imported   int64    `json:"imported"`
+	Rejected   int64    `json:"rejected"`
+	Errors     []string `json:"errors"`
+	DurationMS int64    `json:"durationMs"`
+}
+
+func Open(path string) (*Store, error) {
+	if path == "" {
+		return nil, errors.New("chemin de base vide")
+	}
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		return nil, fmt.Errorf("ouverture SQLite: %w", err)
+	}
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+
+	store := &Store{db: db}
+	if err := store.prepare(); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if path != ":memory:" {
+		_ = os.Chmod(path, 0o600)
+	}
+	return store, nil
+}
+
+func (store *Store) Close() error {
+	return store.db.Close()
+}
+
+func (store *Store) Upsert(ctx context.Context, employee payroll.Employee) error {
+	if issues := payroll.Validate(employee); len(issues) > 0 {
+		return fmt.Errorf("%s: %s", issues[0].Field, issues[0].Message)
+	}
+	_, err := store.db.ExecContext(ctx, upsertSQL, employeeArgs(employee)...)
+	if err != nil {
+		return fmt.Errorf("enregistrement salarié: %w", err)
+	}
+	return nil
+}
+
+func (store *Store) Delete(ctx context.Context, id string) error {
+	if strings.TrimSpace(id) == "" {
+		return errors.New("matricule vide")
+	}
+	if _, err := store.db.ExecContext(ctx, `DELETE FROM employees WHERE id = ?`, id); err != nil {
+		return fmt.Errorf("suppression salarié: %w", err)
+	}
+	return nil
+}
+
+// List uses keyset pagination, so page cost stays stable as the table grows.
+func (store *Store) List(ctx context.Context, cursor, prefix string, limit int) (Page, error) {
+	if limit <= 0 || limit > maxPageSize {
+		limit = 50
+	}
+	prefix = strings.ToUpper(strings.TrimSpace(prefix))
+	query := `SELECT id, first_name, last_name, cin, cnss, rib, days_worked, dependants,
+		gross_centimes, exempt_centimes, advance_centimes
+		FROM employees WHERE id > ?`
+	args := []any{cursor}
+	if prefix != "" {
+		query += ` AND (id LIKE ? OR search_last_name LIKE ? OR cnss LIKE ?)`
+		needle := prefix + "%"
+		args = append(args, needle, needle, needle)
+	}
+	query += ` ORDER BY id LIMIT ?`
+	args = append(args, limit+1)
+
+	rows, err := store.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return Page{}, fmt.Errorf("lecture salariés: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]payroll.Employee, 0, limit)
+	for rows.Next() {
+		var employee payroll.Employee
+		if err := rows.Scan(
+			&employee.ID,
+			&employee.FirstName,
+			&employee.LastName,
+			&employee.CIN,
+			&employee.CNSS,
+			&employee.RIB,
+			&employee.DaysWorked,
+			&employee.Dependants,
+			&employee.GrossCentimes,
+			&employee.ExemptCentimes,
+			&employee.AdvanceCentimes,
+		); err != nil {
+			return Page{}, fmt.Errorf("décodage salarié: %w", err)
+		}
+		items = append(items, employee)
+	}
+	if err := rows.Err(); err != nil {
+		return Page{}, fmt.Errorf("parcours salariés: %w", err)
+	}
+
+	var nextCursor string
+	if len(items) > limit {
+		nextCursor = items[limit-1].ID
+		items = items[:limit]
+	}
+	var total int64
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM employees`).Scan(&total); err != nil {
+		return Page{}, fmt.Errorf("comptage salariés: %w", err)
+	}
+	return Page{Items: items, NextCursor: nextCursor, Total: total}, nil
+}
+
+// WalkPayroll calculates rows one at a time in key order. The callback must not
+// retain rows indefinitely; this contract keeps memory usage independent of size.
+func (store *Store) WalkPayroll(ctx context.Context, yield func(payroll.Result) error) error {
+	rows, err := store.db.QueryContext(ctx, `SELECT id, first_name, last_name, cin, cnss, rib,
+		days_worked, dependants, gross_centimes, exempt_centimes, advance_centimes
+		FROM employees ORDER BY id`)
+	if err != nil {
+		return fmt.Errorf("parcours de la paie: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		var employee payroll.Employee
+		if err := rows.Scan(
+			&employee.ID, &employee.FirstName, &employee.LastName, &employee.CIN, &employee.CNSS,
+			&employee.RIB, &employee.DaysWorked, &employee.Dependants, &employee.GrossCentimes,
+			&employee.ExemptCentimes, &employee.AdvanceCentimes,
+		); err != nil {
+			return fmt.Errorf("décodage de la paie: %w", err)
+		}
+		result, err := payroll.Calculate(employee)
+		if err != nil {
+			return fmt.Errorf("calcul %s: %w", employee.ID, err)
+		}
+		if err := yield(result); err != nil {
+			return err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("parcours de la paie: %w", err)
+	}
+	return nil
+}
+
+// ImportCSV streams records and commits bounded batches; it never loads the file in memory.
+func (store *Store) ImportCSV(ctx context.Context, reader io.Reader) (ImportStats, error) {
+	startedAt := time.Now()
+	buffered := bufio.NewReaderSize(reader, 64*1024)
+	csvReader := csv.NewReader(buffered)
+	csvReader.Comma = ';'
+	csvReader.ReuseRecord = true
+	csvReader.FieldsPerRecord = -1
+
+	header, err := csvReader.Read()
+	if err != nil {
+		return ImportStats{}, fmt.Errorf("lecture entête CSV: %w", err)
+	}
+	if len(header) > 0 {
+		header[0] = strings.TrimPrefix(header[0], "\uFEFF")
+	}
+	columns, err := mapColumns(header)
+	if err != nil {
+		return ImportStats{}, err
+	}
+
+	transaction, statement, err := store.importTransaction(ctx)
+	if err != nil {
+		return ImportStats{}, err
+	}
+	defer statement.Close()
+	defer transaction.Rollback()
+
+	stats := ImportStats{Errors: []string{}}
+	line := 1
+	inBatch := 0
+	for {
+		line++
+		record, readErr := csvReader.Read()
+		if errors.Is(readErr, io.EOF) {
+			break
+		}
+		if readErr != nil {
+			stats.Rejected++
+			stats.addError(fmt.Sprintf("ligne %d: %v", line, readErr))
+			continue
+		}
+		employee, parseErr := employeeFromRecord(record, columns)
+		if parseErr != nil {
+			stats.Rejected++
+			stats.addError(fmt.Sprintf("ligne %d: %v", line, parseErr))
+			continue
+		}
+		if _, execErr := statement.ExecContext(ctx, employeeArgs(employee)...); execErr != nil {
+			return stats, fmt.Errorf("import ligne %d: %w", line, execErr)
+		}
+		stats.Imported++
+		inBatch++
+		if inBatch < commitEvery {
+			continue
+		}
+		if err := statement.Close(); err != nil {
+			return stats, fmt.Errorf("finalisation lot: %w", err)
+		}
+		if err := transaction.Commit(); err != nil {
+			return stats, fmt.Errorf("validation lot: %w", err)
+		}
+		transaction, statement, err = store.importTransaction(ctx)
+		if err != nil {
+			return stats, err
+		}
+		inBatch = 0
+	}
+	if err := statement.Close(); err != nil {
+		return stats, fmt.Errorf("finalisation import: %w", err)
+	}
+	if err := transaction.Commit(); err != nil {
+		return stats, fmt.Errorf("validation import: %w", err)
+	}
+	stats.DurationMS = time.Since(startedAt).Milliseconds()
+	return stats, nil
+}
+
+func (store *Store) prepare() error {
+	statements := []string{
+		`PRAGMA journal_mode = WAL`,
+		`PRAGMA synchronous = NORMAL`,
+		`PRAGMA temp_store = FILE`,
+		`PRAGMA busy_timeout = 5000`,
+		`CREATE TABLE IF NOT EXISTS employees (
+			id TEXT PRIMARY KEY,
+			first_name TEXT NOT NULL,
+			last_name TEXT NOT NULL,
+			search_last_name TEXT NOT NULL,
+			cin TEXT NOT NULL,
+			cnss TEXT NOT NULL,
+			rib TEXT NOT NULL,
+			days_worked INTEGER NOT NULL,
+			dependants INTEGER NOT NULL,
+			gross_centimes INTEGER NOT NULL,
+			exempt_centimes INTEGER NOT NULL,
+			advance_centimes INTEGER NOT NULL,
+			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+		) STRICT`,
+		`CREATE INDEX IF NOT EXISTS employees_last_name_idx ON employees(search_last_name, id)`,
+		`CREATE INDEX IF NOT EXISTS employees_cnss_idx ON employees(cnss, id)`,
+	}
+	for _, statement := range statements {
+		if _, err := store.db.Exec(statement); err != nil {
+			return fmt.Errorf("initialisation base: %w", err)
+		}
+	}
+	return nil
+}
+
+func (store *Store) importTransaction(ctx context.Context) (*sql.Tx, *sql.Stmt, error) {
+	transaction, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("début lot: %w", err)
+	}
+	statement, err := transaction.PrepareContext(ctx, upsertSQL)
+	if err != nil {
+		_ = transaction.Rollback()
+		return nil, nil, fmt.Errorf("préparation import: %w", err)
+	}
+	return transaction, statement, nil
+}
+
+func (stats *ImportStats) addError(message string) {
+	if len(stats.Errors) < 100 {
+		stats.Errors = append(stats.Errors, message)
+	}
+}
+
+func mapColumns(header []string) (map[string]int, error) {
+	columns := make(map[string]int, len(header))
+	for index, name := range header {
+		columns[strings.ToLower(strings.TrimSpace(name))] = index
+	}
+	required := []string{"matricule", "prenom", "nom", "cin", "cnss", "rib", "jours", "personnes_a_charge", "salaire_brut_mad"}
+	for _, name := range required {
+		if _, exists := columns[name]; !exists {
+			return nil, fmt.Errorf("colonne obligatoire absente: %s", name)
+		}
+	}
+	return columns, nil
+}
+
+func employeeFromRecord(record []string, columns map[string]int) (payroll.Employee, error) {
+	value := func(name string) string {
+		index, exists := columns[name]
+		if !exists || index >= len(record) {
+			return ""
+		}
+		return strings.TrimSpace(record[index])
+	}
+	days, err := strconv.Atoi(value("jours"))
+	if err != nil {
+		return payroll.Employee{}, errors.New("jours invalides")
+	}
+	dependants, err := strconv.Atoi(value("personnes_a_charge"))
+	if err != nil {
+		return payroll.Employee{}, errors.New("personnes à charge invalides")
+	}
+	gross, err := parseMAD(value("salaire_brut_mad"))
+	if err != nil {
+		return payroll.Employee{}, fmt.Errorf("salaire brut: %w", err)
+	}
+	exempt, err := parseOptionalMAD(value("exonere_mad"))
+	if err != nil {
+		return payroll.Employee{}, fmt.Errorf("exonéré: %w", err)
+	}
+	advance, err := parseOptionalMAD(value("avance_mad"))
+	if err != nil {
+		return payroll.Employee{}, fmt.Errorf("avance: %w", err)
+	}
+	employee := payroll.Employee{
+		ID: value("matricule"), FirstName: value("prenom"), LastName: value("nom"), CIN: value("cin"),
+		CNSS: value("cnss"), RIB: value("rib"), DaysWorked: days, Dependants: dependants,
+		GrossCentimes: gross, ExemptCentimes: exempt, AdvanceCentimes: advance,
+	}
+	if issues := payroll.Validate(employee); len(issues) > 0 {
+		return payroll.Employee{}, fmt.Errorf("%s: %s", issues[0].Field, issues[0].Message)
+	}
+	return employee, nil
+}
+
+func parseOptionalMAD(value string) (int64, error) {
+	if value == "" {
+		return 0, nil
+	}
+	return parseMAD(value)
+}
+
+func parseMAD(value string) (int64, error) {
+	normalized := strings.ReplaceAll(strings.TrimSpace(value), ",", ".")
+	parts := strings.Split(normalized, ".")
+	if len(parts) > 2 || parts[0] == "" {
+		return 0, errors.New("montant invalide")
+	}
+	dirhams, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil || dirhams < 0 {
+		return 0, errors.New("montant invalide")
+	}
+	var centimes int64
+	if len(parts) == 2 {
+		fraction := parts[1]
+		if len(fraction) == 1 {
+			fraction += "0"
+		}
+		if len(fraction) != 2 {
+			return 0, errors.New("deux décimales maximum")
+		}
+		centimes, err = strconv.ParseInt(fraction, 10, 64)
+		if err != nil {
+			return 0, errors.New("montant invalide")
+		}
+	}
+	return dirhams*100 + centimes, nil
+}
+
+func employeeArgs(employee payroll.Employee) []any {
+	return []any{
+		employee.ID, employee.FirstName, employee.LastName, strings.ToUpper(employee.LastName), employee.CIN,
+		digits(employee.CNSS), digits(employee.RIB), employee.DaysWorked, employee.Dependants,
+		employee.GrossCentimes, employee.ExemptCentimes, employee.AdvanceCentimes,
+	}
+}
+
+func digits(value string) string {
+	var builder strings.Builder
+	for _, character := range value {
+		if character >= '0' && character <= '9' {
+			builder.WriteRune(character)
+		}
+	}
+	return builder.String()
+}
+
+const upsertSQL = `INSERT INTO employees (
+	id, first_name, last_name, search_last_name, cin, cnss, rib, days_worked, dependants,
+	gross_centimes, exempt_centimes, advance_centimes
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(id) DO UPDATE SET
+	first_name=excluded.first_name,
+	last_name=excluded.last_name,
+	search_last_name=excluded.search_last_name,
+	cin=excluded.cin,
+	cnss=excluded.cnss,
+	rib=excluded.rib,
+	days_worked=excluded.days_worked,
+	dependants=excluded.dependants,
+	gross_centimes=excluded.gross_centimes,
+	exempt_centimes=excluded.exempt_centimes,
+	advance_centimes=excluded.advance_centimes,
+	updated_at=CURRENT_TIMESTAMP`

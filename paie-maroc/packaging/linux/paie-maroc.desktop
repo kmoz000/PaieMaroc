@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=PaieMaroc
+Comment=Paie, CNSS et remises bancaires au Maroc
+Exec=/usr/bin/paie-maroc
+Icon=paie-maroc
+Terminal=false
+Categories=Office;Finance;

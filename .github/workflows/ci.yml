@@ -1,0 +1,40 @@
+name: Qualité
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: paie-maroc
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.x'
+          cache-dependency-path: paie-maroc/go.sum
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: paie-maroc/frontend/package-lock.json
+      - name: Installer le frontend
+        run: npm ci
+        working-directory: paie-maroc/frontend
+      - name: Vérifier le format Go
+        run: test -z "$(gofmt -l .)"
+      - name: Analyser le code Go
+        run: go vet ./...
+      - name: Tester avec le détecteur de courses
+        run: go test -race -coverprofile=coverage.out ./...
+      - name: Compiler le frontend
+        run: npm run build
+        working-directory: paie-maroc/frontend
