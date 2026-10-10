@@ -2113,8 +2113,8 @@ function AttendancePage({
             <TextField label="Tolérance retard (min)" type="number" value={String(policy.graceMinutes)} set={(value) => setPolicy({ ...policy, graceMinutes: Number(value) })} min={0} max={180} />
             <TextField label="Majoration jour ouvrable (%)" type="number" value={String(policy.dayPremiumBasisPoints / 100)} set={(value) => setPolicy({ ...policy, dayPremiumBasisPoints: Math.round(Number(value) * 100) })} min={0} />
             <TextField label="Majoration nuit ouvrable (%)" type="number" value={String(policy.nightPremiumBasisPoints / 100)} set={(value) => setPolicy({ ...policy, nightPremiumBasisPoints: Math.round(Number(value) * 100) })} min={0} />
-            <TextField label="Repos/férié de jour (%)" type="number" value={String(policy.restDayPremiumBasisPoints / 100)} set={(value) => setPolicy({ ...policy, restDayPremiumBasisPoints: Math.round(Number(value) * 100) })} min={0} />
-            <TextField label="Repos/férié de nuit (%)" type="number" value={String(policy.restNightPremiumBasisPoints / 100)} set={(value) => setPolicy({ ...policy, restNightPremiumBasisPoints: Math.round(Number(value) * 100) })} min={0} />
+            <TextField label="Repos hebdomadaire de jour (%)" type="number" value={String(policy.restDayPremiumBasisPoints / 100)} set={(value) => setPolicy({ ...policy, restDayPremiumBasisPoints: Math.round(Number(value) * 100) })} min={0} />
+            <TextField label="Repos hebdomadaire de nuit (%)" type="number" value={String(policy.restNightPremiumBasisPoints / 100)} set={(value) => setPolicy({ ...policy, restNightPremiumBasisPoints: Math.round(Number(value) * 100) })} min={0} />
           </div>
           <div className="legal-control"><Icon name="shield" /><div><strong>Garde-fou de calcul</strong><small>Les congés, absences justifiées, repos compensateur et conventions collectives peuvent changer le résultat. Le journal calcule une proposition; il ne modifie pas le brut mensuel sans validation dédiée.</small></div></div>
           <div className="dialog-actions"><button className="button primary" disabled={!isAdmin}>Enregistrer les règles</button></div>
