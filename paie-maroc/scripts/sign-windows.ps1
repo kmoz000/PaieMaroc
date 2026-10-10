@@ -39,6 +39,15 @@ if (-not $VerifyOnly) {
 }
 
 if ($env:PAIEMAROC_SELF_SIGNED -eq 'true') {
+    if ($PSVersionTable.PSEdition -eq 'Core') {
+        $windowsPowerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+        & $windowsPowerShell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass `
+            -File $PSCommandPath -Path $Path -VerifyOnly
+        if ($LASTEXITCODE -ne 0) {
+            throw "Échec de la vérification Authenticode Windows de $Path"
+        }
+        return
+    }
     $signature = Get-AuthenticodeSignature -LiteralPath $Path
     $acceptedStatuses = @('Valid', 'NotTrusted')
     if ($signature.Status.ToString() -notin $acceptedStatuses) {
