@@ -88,18 +88,22 @@ jobs:
           $publicCertificate = Join-Path $env:RUNNER_TEMP 'paie-maroc-authenticode.cer'
           $passwordPlain = [Guid]::NewGuid().ToString('N')
           $password = ConvertTo-SecureString $passwordPlain -AsPlainText -Force
+          Write-Host 'Création de la clé Authenticode provisoire'
           $signer = New-SelfSignedCertificate `
             -Type CodeSigningCert `
             -Subject 'CN=PaieMaroc Provisional Release, O=PaieMaroc, C=MA' `
             -KeyAlgorithm RSA `
-            -KeyLength 3072 `
+            -KeyLength 2048 `
             -HashAlgorithm SHA256 `
             -KeyExportPolicy Exportable `
             -CertStoreLocation 'Cert:\CurrentUser\My' `
             -NotAfter (Get-Date).AddYears(3)
+          Write-Host 'Export du certificat et de sa clé privée'
           Export-PfxCertificate -Cert $signer -FilePath $certificate -Password $password | Out-Null
           Export-Certificate -Cert $signer -FilePath $publicCertificate | Out-Null
-          Import-Certificate -FilePath $publicCertificate -CertStoreLocation 'Cert:\CurrentUser\Root' | Out-Null
+          Write-Host 'Ajout non interactif au magasin de confiance temporaire'
+          & certutil.exe -user -f -addstore Root $publicCertificate | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Impossible d’ajouter le certificat au magasin racine temporaire.' }
           "PAIEMAROC_CERTIFICATE_PATH=$certificate" | Out-File -FilePath $env:GITHUB_ENV -Append
           "PAIEMAROC_SELF_SIGNED=true" | Out-File -FilePath $env:GITHUB_ENV -Append
           "PAIEMAROC_SELF_SIGNED_THUMBPRINT=$($signer.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Append
