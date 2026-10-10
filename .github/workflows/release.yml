@@ -103,7 +103,7 @@ jobs:
           Export-Certificate -Cert $signer -FilePath $publicCertificate | Out-Null
           Write-Host 'Ajout non interactif au magasin de confiance temporaire'
           & certutil.exe -user -f -addstore Root $publicCertificate | Out-Null
-          if ($LASTEXITCODE -ne 0) { throw 'Impossible d’ajouter le certificat au magasin racine temporaire.' }
+          if ($LASTEXITCODE -ne 0) { throw "Impossible d'ajouter le certificat au magasin racine temporaire." }
           "PAIEMAROC_CERTIFICATE_PATH=$certificate" | Out-File -FilePath $env:GITHUB_ENV -Append
           "PAIEMAROC_SELF_SIGNED=true" | Out-File -FilePath $env:GITHUB_ENV -Append
           "PAIEMAROC_SELF_SIGNED_THUMBPRINT=$($signer.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Append
