@@ -22,10 +22,10 @@ select {
 button:focus-visible,
 input:focus-visible,
 select:focus-visible {
-  outline: 2px solid #635bff;
+  outline: 2px solid #0874dc;
   outline-offset: 2px;
 }
 ::selection {
   color: #fff;
-  background: #635bff;
+  background: #0874dc;
 }

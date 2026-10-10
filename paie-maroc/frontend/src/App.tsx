@@ -33,6 +33,7 @@ import {
   WindowMinimise,
   WindowToggleMaximise,
 } from "../wailsjs/runtime/runtime";
+import brandLogo from "./assets/paie-maroc-hr-logo.png";
 import "./App.css";
 
 type User = {
@@ -418,12 +419,11 @@ function DesktopFrame({ children }: { children: ReactNode }) {
     <div className={`desktop-window ${isMac ? "platform-mac" : ""}`}>
       <header className="desktop-titlebar" onDoubleClick={toggleMaximise}>
         <div className="frame-origin">
-          <LogoMark compact />
           <strong>PaieMaroc</strong>
           <span>POSTE LOCAL</span>
         </div>
         <div className="frame-center">
-          <i />
+          <Icon name="lock" size={11} />
           Espace de paie sécurisé
         </div>
         {isNative && !isMac && (
@@ -462,10 +462,11 @@ function BootSequence() {
   return (
     <div className="boot">
       <div className="boot-emblem">
-        <LogoMark animated />
-        <span className="orbit-dot" />
+        <img
+          src={brandLogo}
+          alt="PaieMaroc — Gestion des Ressources Humaines"
+        />
       </div>
-      <Brand wordsOnly />
       <div className="boot-progress" aria-label="Chargement de PaieMaroc">
         <i />
       </div>
@@ -819,7 +820,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
               <strong>Coffre de paie local</strong>
               <small>SQLite · cet appareil</small>
             </span>
-            <i />
+            <em>LOCAL</em>
           </div>
           <button className="account" onClick={onLogout}>
             <b>{initials(user.displayName)}</b>
@@ -839,8 +840,8 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
             <small>Gestion de paie marocaine</small>
           </div>
           <div className="top-actions">
-            <span className="status-dot">
-              <i />
+            <span className="save-status">
+              <Icon name="check" size={12} />
               Enregistré
             </span>
             <SelectField
@@ -1111,7 +1112,7 @@ function PayrollPage({
         </div>
       </div>
       {period.status === "closed" && (
-        <div className="banner violet">
+        <div className="banner brand">
           <Icon name="lock" />
           <div>
             <strong>Période clôturée</strong>
@@ -1127,7 +1128,7 @@ function PayrollPage({
           label="NET À PAYER"
           value={money(batch.netTotalCentimes)}
           detail="Virements du mois"
-          tone="violet"
+          tone="brand"
           icon="send"
         />
         <Metric
@@ -1174,16 +1175,16 @@ function PayrollPage({
           </div>
           <div className="format-picker">
             {[
-              ["simt500", "SIMT 500"],
-              ["csv", "CSV universel"],
-              ["iso20022", "ISO 20022"],
+              ["simt500", "SIMT 500", "TXT"],
+              ["csv", "CSV universel", "CSV"],
+              ["iso20022", "ISO 20022", "XML"],
             ].map((item) => (
               <button
                 key={item[0]}
                 className={format === item[0] ? "selected" : ""}
                 onClick={() => setFormat(item[0])}
               >
-                <i />
+                <small>{item[2]}</small>
                 {item[1]}
               </button>
             ))}
@@ -1271,10 +1272,7 @@ function PayrollPage({
                         <strong>{money(row.netPay)}</strong>
                       </td>
                       <td>
-                        <em className="badge success">
-                          <i />
-                          Prêt
-                        </em>
+                        <em className="badge success">Prêt</em>
                       </td>
                       <td>
                         <button
@@ -1757,7 +1755,6 @@ function DevicesPage({
               <em
                 className={`badge ${device.lastStatus === "online" ? "success" : "neutral"}`}
               >
-                <i />
                 {device.lastStatus === "online"
                   ? "En ligne"
                   : device.lastStatus === "offline"
@@ -2319,45 +2316,10 @@ function EmptyState() {
     </section>
   );
 }
-function LogoMark({
-  compact = false,
-  animated = false,
-}: {
-  compact?: boolean;
-  animated?: boolean;
-}) {
-  return (
-    <svg
-      className={`logo-mark ${compact ? "compact" : ""} ${animated ? "animated" : ""}`}
-      viewBox="0 0 48 48"
-      role="img"
-      aria-label="Symbole PaieMaroc : bulletin de paie contrôlé"
-    >
-      <path className="logo-sheet" d="M10 5h20l8 8v30H10z" />
-      <path className="logo-fold" d="M30 5v9h8" />
-      <path className="logo-row row-one" d="M16 19h16" />
-      <path className="logo-row row-two" d="M16 25h10" />
-      <circle className="logo-seal" cx="30" cy="32" r="8" />
-      <path className="logo-check" d="m26.5 32 2.3 2.4 4.8-5.1" />
-      <path className="logo-spine" d="M10 11v26" />
-    </svg>
-  );
-}
-
-function Brand({
-  light = false,
-  wordsOnly = false,
-}: {
-  light?: boolean;
-  wordsOnly?: boolean;
-}) {
+function Brand({ light = false }: { light?: boolean }) {
   return (
     <div className={`brand ${light ? "light" : ""}`}>
-      {!wordsOnly && <LogoMark />}
-      <span>
-        <strong>PaieMaroc</strong>
-        <small>PAIE · CNSS · VIREMENTS</small>
-      </span>
+      <img src={brandLogo} alt="PaieMaroc — Gestion des Ressources Humaines" />
     </div>
   );
 }

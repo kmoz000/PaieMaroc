@@ -27,7 +27,7 @@ func main() {
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		BackgroundColour: &options.RGBA{R: 11, G: 29, B: 49, A: 1},
+		BackgroundColour: &options.RGBA{R: 2, G: 58, B: 116, A: 1},
 		Mac: &mac.Options{
 			TitleBar: mac.TitleBarHiddenInset(),
 		},

@@ -7,7 +7,7 @@
       name="description"
       content="PaieMaroc, l’application de bureau libre pour préparer la paie, les déclarations CNSS et les virements de masse au Maroc."
     />
-    <meta name="theme-color" content="#123c34" />
+    <meta name="theme-color" content="#023a74" />
     <meta
       property="og:title"
       content="PaieMaroc — la paie marocaine, simplement"
@@ -19,7 +19,7 @@
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://kmoz000.github.io/PaieMaroc/" />
     <title>PaieMaroc — Paie, CNSS et virements</title>
-    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="favicon.png" type="image/png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -32,7 +32,11 @@
   <body>
     <a class="skip" href="#contenu">Aller au contenu</a>
     <header class="nav">
-      <a class="logo" href="#"><span>M</span><strong>PaieMaroc</strong></a>
+      <a class="logo" href="#" aria-label="PaieMaroc — accueil"
+        ><img
+          src="paie-maroc-hr-logo.png"
+          alt="PaieMaroc — Gestion des Ressources Humaines"
+      /></a>
       <nav aria-label="Navigation principale">
         <a href="#fonctionnalites">Fonctionnalités</a>
         <a href="#confiance">Confiance</a>
@@ -43,9 +47,8 @@
 
     <main id="contenu">
       <section class="hero">
-        <div class="ornament" aria-hidden="true"></div>
         <div class="hero-copy">
-          <div class="eyebrow"><i></i> Gratuit, libre et stocké localement</div>
+          <div class="eyebrow">Gratuit, libre et stocké localement</div>
           <h1>La paie<br />marocaine.<br /><em>Claire, enfin.</em></h1>
           <p>
             Préparez la paie, contrôlez vos données CNSS et générez vos remises
@@ -70,15 +73,15 @@
         </div>
 
         <div class="app-stage" aria-label="Aperçu de l’application PaieMaroc">
-          <div class="glow"></div>
           <div class="app-window">
             <div class="titlebar">
-              <span><i></i><i></i><i></i></span><b>PaieMaroc</b
-              ><em>Octobre 2026</em>
+              <small>POSTE LOCAL</small><b>PaieMaroc</b><em>Octobre 2026</em>
             </div>
             <div class="app-body">
               <aside>
-                <div class="mini-logo">M</div>
+                <div class="mini-logo">
+                  <img src="paie-maroc-hr-logo.png" alt="" />
+                </div>
                 <span class="active">⌁</span><span>♙</span><span>▣</span
                 ><span>◇</span>
               </aside>
@@ -180,7 +183,7 @@
               </ul>
             </div>
             <div class="import-visual">
-              <span class="file">CSV</span><i></i>
+              <span class="file">CSV</span><span class="connector"></span>
               <section>
                 <b>Import terminé</b><strong>1 000 000</strong
                 ><small>lignes contrôlées</small><em><u></u></em>
@@ -237,7 +240,9 @@
           </div>
         </div>
         <div class="shield">
-          <div><span>M</span><i></i></div>
+          <div>
+            <img src="paie-maroc-hr-logo.png" alt="" />
+          </div>
           <p>Votre paie<br /><b>reste privée</b></p>
         </div>
       </section>
@@ -283,7 +288,11 @@
     </main>
 
     <footer>
-      <a class="logo" href="#"><span>M</span><strong>PaieMaroc</strong></a>
+      <a class="logo" href="#" aria-label="PaieMaroc — accueil"
+        ><img
+          src="paie-maroc-hr-logo.png"
+          alt="PaieMaroc — Gestion des Ressources Humaines"
+      /></a>
       <p>Fait au Maroc pour les équipes RH. Logiciel libre sous licence MIT.</p>
       <nav>
         <a href="https://github.com/kmoz000/PaieMaroc/releases">Versions</a
