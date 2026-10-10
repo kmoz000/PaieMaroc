@@ -36,6 +36,12 @@ import {
 import brandLogo from "./assets/paie-maroc-hr-logo.png";
 import whiteBrandLogo from "./assets/paie-maroc-hr-logo-white.png";
 import {
+  buildCNSSReadiness,
+  describeCNSSError,
+  type CNSSErrorNotice,
+  type CNSSReadiness,
+} from "./cnss-guidance";
+import {
   employeePatterns,
   nextEmployeeID,
   validateEmployee,
@@ -75,6 +81,15 @@ type Batch = {
   employerChargesTotal: number;
   employerCostCentimes: number;
   rulesVersion: string;
+};
+type CNSSResult = {
+  path: string;
+  imported: number;
+  existingCount: number;
+  entrantCount: number;
+  employeeCount: number;
+  grossCentimes: number;
+  cappedCentimes: number;
 };
 type Period = {
   period: string;
@@ -986,7 +1001,9 @@ function PayrollPage({
 }) {
   const [search, setSearch] = useState(""),
     [busy, setBusy] = useState(false),
-    [format, setFormat] = useState("simt500");
+    [format, setFormat] = useState("simt500"),
+    [cnssResult, setCNSSResult] = useState<CNSSResult | null>(null),
+    [cnssIssue, setCNSSIssue] = useState<CNSSErrorNotice | null>(null);
   const rows = useMemo(() => {
     const query = search.toLowerCase().trim();
     return query
@@ -997,6 +1014,15 @@ function PayrollPage({
         )
       : batch.rows;
   }, [batch, search]);
+  const cnssReadiness = useMemo(
+    () =>
+      buildCNSSReadiness(
+        employees,
+        period?.status ?? "open",
+        period?.employeeCount ?? employees.length,
+      ),
+    [employees, period?.employeeCount, period?.status],
+  );
   function add() {
     if (canEdit)
       edit({
@@ -1049,18 +1075,40 @@ function PayrollPage({
   }
   async function cnss() {
     if (!period) return;
+    if (!cnssReadiness.canGenerate) {
+      setCNSSIssue({
+        code: "BDS-010",
+        title: "Précontrôle bloquant",
+        detail: `Corrigez ${cnssReadiness.errors.length} anomalie(s) affichée(s) avant de choisir le préétabli.`,
+        cancelled: false,
+      });
+      notify("BDS bloqué · corrigez les anomalies affichées");
+      return;
+    }
     setBusy(true);
+    setCNSSIssue(null);
+    setCNSSResult(null);
     try {
       if (!isNative) {
+        setCNSSIssue({
+          code: "BDS-DEMO",
+          title: "Aperçu du parcours",
+          detail:
+            "La sélection du préétabli et l’écriture du fichier sont disponibles dans l’application bureau.",
+          cancelled: true,
+        });
         notify("Assistant e-BDS disponible dans l’application bureau");
         return;
       }
-      const result = await GenerateCNSSBDS(period.period);
+      const result = (await GenerateCNSSBDS(period.period)) as CNSSResult;
+      setCNSSResult(result);
       notify(
         `BDS généré · ${result.employeeCount} salariés · ${result.entrantCount} entrant(s)`,
       );
     } catch (error) {
-      notify(friendlyError(error));
+      const issue = describeCNSSError(error);
+      setCNSSIssue(issue);
+      notify(`${issue.code} · ${issue.title}`);
     } finally {
       setBusy(false);
     }
@@ -1183,13 +1231,14 @@ function PayrollPage({
         />
       </div>
       {route === "cnss" ? (
-        <ActionPanel
-          icon="shield"
-          title="Générer la déclaration e-BDS"
-          text={`Choisissez uniquement le préétabli CNSS de ${period.period}. Les salaires, jours et nouveaux entrants viennent directement de cette période enregistrée.`}
-          button="Ouvrir l’assistant CNSS"
-          action={cnss}
+        <CNSSWorkbench
+          period={period}
+          employees={employees}
+          readiness={cnssReadiness}
+          result={cnssResult}
+          issue={cnssIssue}
           busy={busy}
+          generate={cnss}
         />
       ) : route === "exports" ? (
         <section className="panel export-panel">
@@ -2479,35 +2528,184 @@ function DialogHead({
     </div>
   );
 }
-function ActionPanel({
-  icon,
-  title,
-  text,
-  button,
-  action,
+function CNSSWorkbench({
+  period,
+  employees,
+  readiness,
+  result,
+  issue,
   busy,
+  generate,
 }: {
-  icon: string;
-  title: string;
-  text: string;
-  button: string;
-  action: () => void;
+  period: Period;
+  employees: Employee[];
+  readiness: CNSSReadiness;
+  result: CNSSResult | null;
+  issue: CNSSErrorNotice | null;
   busy: boolean;
+  generate: () => void;
+}) {
+  const completed = Boolean(result);
+  return (
+    <section className="panel bds-workbench" data-testid="cnss-workbench">
+      <header className="bds-head">
+        <div>
+          <span className="eyebrow">ASSISTANT E-BDS · {period.period}</span>
+          <h2>Contrôler avant de remettre</h2>
+          <p>
+            Un seul fichier à choisir : le préétabli CNSS du mois. Les données
+            de paie viennent de la période enregistrée.
+          </p>
+        </div>
+        <span
+          className={`bds-status ${readiness.canGenerate ? "ready" : "blocked"}`}
+        >
+          <Icon name={readiness.canGenerate ? "check" : "warning"} size={14} />
+          {readiness.canGenerate ? "Prêt à contrôler" : "Correction requise"}
+        </span>
+      </header>
+
+      <div className="bds-layout">
+        <ol className="bds-steps" aria-label="Étapes de génération BDS">
+          <li className={readiness.canGenerate ? "complete" : "blocked"}>
+            <b>01</b>
+            <span>
+              <strong>Période enregistrée</strong>
+              <small>
+                {period.employeeCount.toLocaleString("fr")} salarié(s) · données
+                SQLite du mois
+              </small>
+            </span>
+            <em>{readiness.canGenerate ? "PRÊT" : "À CORRIGER"}</em>
+          </li>
+          <li className={busy || completed ? "active" : "waiting"}>
+            <b>02</b>
+            <span>
+              <strong>Préétabli CNSS</strong>
+              <small>
+                Contrôle A00–A03, période et ordre des immatriculations
+              </small>
+            </span>
+            <em>{busy ? "LECTURE" : completed ? "VALIDÉ" : "À CHOISIR"}</em>
+          </li>
+          <li className={completed ? "complete" : "waiting"}>
+            <b>03</b>
+            <span>
+              <strong>Fichier BDS</strong>
+              <small>Assemblage B00–B06 et contrôle des totaux</small>
+            </span>
+            <em>{completed ? "CRÉÉ" : "EN ATTENTE"}</em>
+          </li>
+        </ol>
+
+        <div className="bds-control">
+          <div className="bds-summary">
+            <span>
+              <small>SALARIÉS DU MOIS</small>
+              <strong>{period.employeeCount.toLocaleString("fr")}</strong>
+            </span>
+            <span>
+              <small>ENTRANTS REPÉRÉS</small>
+              <strong>{readiness.entrantCount.toLocaleString("fr")}</strong>
+            </span>
+            <span>
+              <small>BLOCAGES</small>
+              <strong>{readiness.errors.length}</strong>
+            </span>
+          </div>
+
+          {readiness.errors.map((notice) => (
+            <BDSNotice key={notice.code} tone="error" notice={notice} />
+          ))}
+          {readiness.warnings.map((notice) => (
+            <BDSNotice key={notice.code} tone="warning" notice={notice} />
+          ))}
+          {issue && (
+            <BDSNotice
+              tone={issue.cancelled ? "info" : "error"}
+              notice={issue}
+              role={issue.cancelled ? "status" : "alert"}
+            />
+          )}
+          {result && (
+            <div className="bds-result" role="status">
+              <Icon name="check" size={20} />
+              <div>
+                <span className="eyebrow">BDS GÉNÉRÉ ET CONTRÔLÉ</span>
+                <strong>
+                  {result.employeeCount.toLocaleString("fr")} salariés ·{" "}
+                  {result.entrantCount.toLocaleString("fr")} entrant(s)
+                </strong>
+                <small>{result.path}</small>
+              </div>
+              <b>{money(result.grossCentimes)}</b>
+            </div>
+          )}
+
+          <div className="bds-action">
+            <div>
+              <strong>Le fichier source reste intact</strong>
+              <small>
+                En cas d’erreur, PaieMaroc supprime automatiquement la sortie
+                incomplète.
+              </small>
+            </div>
+            <button
+              className="button primary"
+              onClick={generate}
+              disabled={busy || !readiness.canGenerate}
+            >
+              {busy
+                ? "Contrôle en cours…"
+                : completed
+                  ? "Générer à nouveau"
+                  : "Choisir et générer"}
+              <Icon name="arrow" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function BDSNotice({
+  notice,
+  tone,
+  role,
+}: {
+  notice: {
+    code: string;
+    title: string;
+    detail: string;
+    employeeIDs?: string[];
+  };
+  tone: "error" | "warning" | "info";
+  role?: "alert" | "status";
 }) {
   return (
-    <section className="panel action-panel">
-      <span className="action-icon">
-        <Icon name={icon} />
+    <div className={`bds-notice ${tone}`} role={role}>
+      <span>
+        <Icon
+          name={
+            tone === "error"
+              ? "warning"
+              : tone === "warning"
+                ? "clock"
+                : "shield"
+          }
+          size={16}
+        />
       </span>
       <div>
-        <h2>{title}</h2>
-        <p>{text}</p>
+        <small>{notice.code}</small>
+        <strong>{notice.title}</strong>
+        <p>{notice.detail}</p>
+        {notice.employeeIDs?.length ? (
+          <em>Fiches : {notice.employeeIDs.join(", ")}</em>
+        ) : null}
       </div>
-      <button className="button primary" onClick={action} disabled={busy}>
-        {busy ? "Traitement…" : button}
-        <Icon name="arrow" />
-      </button>
-    </section>
+    </div>
   );
 }
 function EmptyState() {

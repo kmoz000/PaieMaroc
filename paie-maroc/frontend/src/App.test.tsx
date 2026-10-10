@@ -88,3 +88,27 @@ describe("employee dialog", () => {
     expect(screen.queryByRole("button", { name: "Enregistrer" })).toBeNull();
   });
 });
+
+describe("CNSS visual workflow", () => {
+  it("shows the preflight, guided stages and warnings before export", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    const cnssNavigation = await screen.findByRole(
+      "button",
+      { name: /Déclaration CNSS/ },
+      { timeout: 2000 },
+    );
+    await user.click(cnssNavigation);
+
+    expect(screen.getByTestId("cnss-workbench")).toBeVisible();
+    expect(screen.getByText("Contrôler avant de remettre")).toBeVisible();
+    expect(
+      screen.getByRole("list", { name: "Étapes de génération BDS" }),
+    ).toBeVisible();
+    expect(screen.getByText("Période encore modifiable")).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: /Choisir et générer/ }),
+    ).toBeEnabled();
+  });
+});
