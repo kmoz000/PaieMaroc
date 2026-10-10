@@ -106,6 +106,18 @@ func TestGenerateRejectsSummaryOverflow(t *testing.T) {
 	}
 }
 
+func TestGenerateForPeriodRejectsAnotherMonth(t *testing.T) {
+	t.Parallel()
+	source := memorySource{existing: map[string]cnss.Declaration{
+		"168764721": {Days: 26, GrossCentimes: 800_000, CappedGrossCentimes: 600_000},
+	}}
+	var output bytes.Buffer
+	_, err := cnss.GenerateForPeriod(strings.NewReader(testPreEstablished()), &output, source, "202611")
+	if err == nil || !strings.Contains(err.Error(), "pas la période active") {
+		t.Fatalf("GenerateForPeriod() error = %v", err)
+	}
+}
+
 func testPreEstablished() string {
 	a00 := "A00" + "00000000000001" + "A0" + strings.Repeat(" ", 241)
 	a01 := "A01" + "1773341" + "202610" + fixed("ATLAS CONSEIL", 40) + fixed("SERVICES", 40) +

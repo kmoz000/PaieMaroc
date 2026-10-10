@@ -23,7 +23,7 @@ export function DeleteEmployee(arg1:string):Promise<void>;
 
 export function DeletePeriod(arg1:string):Promise<void>;
 
-export function GenerateCNSSBDS():Promise<main.CNSSResult>;
+export function GenerateCNSSBDS(arg1:string):Promise<main.CNSSResult>;
 
 export function GetAuthState():Promise<main.AuthState>;
 

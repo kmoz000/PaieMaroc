@@ -61,8 +61,21 @@ type sectionTotals struct {
 // Generate transforms a CNSS pre-established A00-A03 stream into B00-B06.
 // It uses constant memory apart from the caller-provided DataSource.
 func Generate(preEstablished io.Reader, output io.Writer, source DataSource) (Totals, error) {
+	return generate(preEstablished, output, source, "")
+}
+
+// GenerateForPeriod also requires the YYYYMM period embedded in A01/A02/A03
+// to match the active payroll period selected by the user.
+func GenerateForPeriod(preEstablished io.Reader, output io.Writer, source DataSource, expectedPeriod string) (Totals, error) {
+	return generate(preEstablished, output, source, expectedPeriod)
+}
+
+func generate(preEstablished io.Reader, output io.Writer, source DataSource, expectedPeriod string) (Totals, error) {
 	if source == nil {
 		return Totals{}, errors.New("source de paie absente")
+	}
+	if expectedPeriod != "" && (len(expectedPeriod) != 6 || !digits(expectedPeriod)) {
+		return Totals{}, errors.New("la période e-BDS attendue doit respecter AAAAMM")
 	}
 	scanner := bufio.NewScanner(preEstablished)
 	scanner.Buffer(make([]byte, 4*1024), recordLength+2)
@@ -102,6 +115,9 @@ func Generate(preEstablished io.Reader, output io.Writer, source DataSource) (To
 			period = line[10:16]
 			if !digits(affiliate) || !digits(period) {
 				return Totals{}, errors.New("l'affilié et la période A01 doivent être numériques")
+			}
+			if expectedPeriod != "" && period != expectedPeriod {
+				return Totals{}, fmt.Errorf("le préétabli concerne %s, pas la période active %s", period, expectedPeriod)
 			}
 			if !validCheckNumber(affiliate) {
 				return Totals{}, errors.New("la clé du numéro d'affilié A01 est invalide")

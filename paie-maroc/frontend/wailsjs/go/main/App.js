@@ -34,8 +34,8 @@ export function DeletePeriod(arg1) {
   return window['go']['main']['App']['DeletePeriod'](arg1);
 }
 
-export function GenerateCNSSBDS() {
-  return window['go']['main']['App']['GenerateCNSSBDS']();
+export function GenerateCNSSBDS(arg1) {
+  return window['go']['main']['App']['GenerateCNSSBDS'](arg1);
 }
 
 export function GetAuthState() {

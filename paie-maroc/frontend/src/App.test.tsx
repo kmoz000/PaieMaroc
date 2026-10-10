@@ -22,6 +22,10 @@ describe("employee validation", () => {
     expect(validateEmployee(validEmployee)).toEqual([]);
   });
 
+  it("accepts an empty CNSS number for an employee awaiting registration", () => {
+    expect(validateEmployee({ ...validEmployee, cnss: "" })).toEqual([]);
+  });
+
   it("returns actionable errors before persistence", () => {
     const issues = validateEmployee({
       ...validEmployee,

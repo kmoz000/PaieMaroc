@@ -79,14 +79,14 @@ func validRequest(format exporter.Format) exporter.Request {
 	rows := []payroll.Result{
 		{
 			Employee: payroll.Employee{
-				ID: "EMP-001", FirstName: "Amine", LastName: "Alaoui", CNSS: "1234567",
+				ID: "EMP-001", FirstName: "Amine", LastName: "Alaoui", CNSS: "168764721",
 				CIN: "AB123456", RIB: "011780000012345678901234", DaysWorked: 26, GrossCentimes: 700_000,
 			},
 			NetPay: 621_500,
 		},
 		{
 			Employee: payroll.Employee{
-				ID: "EMP-002", FirstName: "Sara", LastName: "Bennani", CNSS: "7654321",
+				ID: "EMP-002", FirstName: "Sara", LastName: "Bennani", CNSS: "213456785",
 				CIN: "BE654321", RIB: "022780000098765432109876", DaysWorked: 26, GrossCentimes: 700_000,
 			},
 			NetPay: 590_000,

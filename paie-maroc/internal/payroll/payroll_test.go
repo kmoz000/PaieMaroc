@@ -140,6 +140,15 @@ func TestValidate(t *testing.T) {
 	}
 }
 
+func TestValidateAllowsPendingCNSSForNewEntrant(t *testing.T) {
+	t.Parallel()
+	employee := validEmployee(500_000)
+	employee.CNSS = ""
+	if issues := payroll.Validate(employee); len(issues) != 0 {
+		t.Fatalf("Validate() = %+v, want no issue", issues)
+	}
+}
+
 func TestCalculateBatchRejectsDuplicates(t *testing.T) {
 	t.Parallel()
 
@@ -147,7 +156,7 @@ func TestCalculateBatchRejectsDuplicates(t *testing.T) {
 	second := validEmployee(600_000)
 	second.FirstName = "Sara"
 	second.CIN = "BE654321"
-	second.CNSS = "7654321"
+	second.CNSS = "213456785"
 
 	_, issues := payroll.CalculateBatch([]payroll.Employee{first, second})
 	if len(issues) != 2 {
@@ -161,7 +170,7 @@ func validEmployee(gross int64) payroll.Employee {
 		FirstName:      "Amine",
 		LastName:       "Alaoui",
 		CIN:            "AB123456",
-		CNSS:           "1234567",
+		CNSS:           "168764721",
 		RIB:            "011780000012345678901234",
 		DaysWorked:     26,
 		Dependants:     0,

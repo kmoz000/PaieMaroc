@@ -97,8 +97,8 @@ func Validate(employee Employee) []ValidationIssue {
 	}
 
 	cnss := compactDigits(employee.CNSS)
-	if len(cnss) < 6 || len(cnss) > 12 || !digitsOnly.MatchString(cnss) {
-		add("cnss", "Le numéro CNSS doit contenir 6 à 12 chiffres.")
+	if cnss != "" && (len(cnss) != 9 || !digitsOnly.MatchString(cnss)) {
+		add("cnss", "Le numéro CNSS doit contenir exactement 9 chiffres, ou rester vide pour un nouvel entrant.")
 	}
 
 	rib := compactDigits(employee.RIB)

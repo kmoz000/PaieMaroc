@@ -380,15 +380,19 @@ func (app *App) SaveAllEmployeesExport(input LargeExportInput) (exporter.StreamR
 	return result, nil
 }
 
-// GenerateCNSSBDS guides the user through selecting the CNSS pre-established
-// file and declaration CSV. The CSV is indexed in a temporary on-disk database
-// so generation remains bounded for very large employers.
-func (app *App) GenerateCNSSBDS() (CNSSResult, error) {
+// GenerateCNSSBDS combines one CNSS pre-established file with the employee
+// values already saved in the selected payroll period. A temporary on-disk
+// index keeps matching and entrant detection bounded for very large employers.
+func (app *App) GenerateCNSSBDS(period string) (CNSSResult, error) {
 	if _, err := app.requireAuthenticated(); err != nil {
 		return CNSSResult{}, err
 	}
+	period = strings.TrimSpace(period)
+	if _, err := app.store.GetPeriod(app.ctx, period); err != nil {
+		return CNSSResult{}, err
+	}
 	preEstablishedPath, err := runtime.OpenFileDialog(app.ctx, runtime.OpenDialogOptions{
-		Title:   "1/3 — Choisir le fichier préétabli CNSS",
+		Title:   "1/2 — Choisir le fichier préétabli CNSS",
 		Filters: []runtime.FileFilter{{DisplayName: "Préétabli CNSS (DS_* ou TXT)", Pattern: "DS_*;*.txt"}},
 	})
 	if err != nil {
@@ -397,19 +401,9 @@ func (app *App) GenerateCNSSBDS() (CNSSResult, error) {
 	if preEstablishedPath == "" {
 		return CNSSResult{}, errors.New("génération CNSS annulée")
 	}
-	declarationsPath, err := runtime.OpenFileDialog(app.ctx, runtime.OpenDialogOptions{
-		Title:   "2/3 — Choisir les déclarations CNSS CSV",
-		Filters: []runtime.FileFilter{{DisplayName: "Déclarations CNSS (*.csv)", Pattern: "*.csv"}},
-	})
-	if err != nil {
-		return CNSSResult{}, fmt.Errorf("sélection des déclarations: %w", err)
-	}
-	if declarationsPath == "" {
-		return CNSSResult{}, errors.New("génération CNSS annulée")
-	}
 	outputPath, err := runtime.SaveFileDialog(app.ctx, runtime.SaveDialogOptions{
-		Title:           "3/3 — Enregistrer le BDS contrôlé",
-		DefaultFilename: "DS_CNSS.txt",
+		Title:           "2/2 — Enregistrer le BDS contrôlé",
+		DefaultFilename: "DS_CNSS_" + period + ".txt",
 	})
 	if err != nil {
 		return CNSSResult{}, fmt.Errorf("sélection de la destination: %w", err)
@@ -417,17 +411,15 @@ func (app *App) GenerateCNSSBDS() (CNSSResult, error) {
 	if outputPath == "" {
 		return CNSSResult{}, errors.New("génération CNSS annulée")
 	}
+	return app.generateCNSSBDS(period, preEstablishedPath, outputPath)
+}
 
+func (app *App) generateCNSSBDS(period, preEstablishedPath, outputPath string) (CNSSResult, error) {
 	preEstablished, err := os.Open(preEstablishedPath)
 	if err != nil {
 		return CNSSResult{}, fmt.Errorf("ouverture du préétabli: %w", err)
 	}
 	defer preEstablished.Close()
-	declarations, err := os.Open(declarationsPath)
-	if err != nil {
-		return CNSSResult{}, fmt.Errorf("ouverture des déclarations: %w", err)
-	}
-	defer declarations.Close()
 	temporary, err := os.CreateTemp("", "paie-maroc-cnss-*.db")
 	if err != nil {
 		return CNSSResult{}, fmt.Errorf("création de l'index CNSS: %w", err)
@@ -439,7 +431,9 @@ func (app *App) GenerateCNSSBDS() (CNSSResult, error) {
 	if err := os.Remove(temporaryPath); err != nil {
 		return CNSSResult{}, err
 	}
-	source, stats, err := cnss.OpenCSVSource(app.ctx, declarations, temporaryPath)
+	source, stats, err := cnss.OpenPayrollSource(app.ctx, temporaryPath, func(yield func(payroll.Employee) error) error {
+		return app.store.WalkPeriodEmployees(app.ctx, period, yield)
+	})
 	if err != nil {
 		return CNSSResult{}, err
 	}
@@ -449,7 +443,12 @@ func (app *App) GenerateCNSSBDS() (CNSSResult, error) {
 	if err != nil {
 		return CNSSResult{}, fmt.Errorf("création du BDS: %w", err)
 	}
-	totals, generateErr := cnss.Generate(preEstablished, output, source)
+	totals, generateErr := cnss.GenerateForPeriod(
+		preEstablished,
+		output,
+		source,
+		strings.ReplaceAll(period, "-", ""),
+	)
 	closeErr := output.Close()
 	if generateErr != nil {
 		_ = os.Remove(outputPath)

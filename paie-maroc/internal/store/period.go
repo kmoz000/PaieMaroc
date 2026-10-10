@@ -171,6 +171,43 @@ func (store *Store) ListPeriodEmployees(ctx context.Context, period, cursor, pre
 	return Page{Items: items, NextCursor: nextCursor, Total: total}, nil
 }
 
+// WalkPeriodEmployees streams the exact employee inputs saved for one payroll
+// period. The callback must not retain rows indefinitely so very large payrolls
+// remain bounded by the database cursor rather than available memory.
+func (store *Store) WalkPeriodEmployees(ctx context.Context, period string, yield func(payroll.Employee) error) error {
+	if _, err := store.GetPeriod(ctx, period); err != nil {
+		return err
+	}
+	rows, err := store.db.QueryContext(ctx, `SELECT e.id, e.first_name, e.last_name, e.cin, e.cnss, e.rib,
+		pe.days_worked, pe.dependants, pe.gross_centimes, pe.exempt_centimes, pe.advance_centimes
+		FROM payroll_entries pe JOIN employees e ON e.id = pe.employee_id
+		WHERE pe.period = ? ORDER BY e.id`, period)
+	if err != nil {
+		return fmt.Errorf("parcours de la période %s: %w", period, err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		var employee payroll.Employee
+		if err := rows.Scan(
+			&employee.ID, &employee.FirstName, &employee.LastName, &employee.CIN,
+			&employee.CNSS, &employee.RIB, &employee.DaysWorked, &employee.Dependants,
+			&employee.GrossCentimes, &employee.ExemptCentimes, &employee.AdvanceCentimes,
+		); err != nil {
+			return fmt.Errorf("décodage de la période %s: %w", period, err)
+		}
+		if err := yield(employee); err != nil {
+			return err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("parcours de la période %s: %w", period, err)
+	}
+	return nil
+}
+
 // SavePeriodEmployee updates the single employee master record and the
 // selected draft month's payroll values in one transaction.
 func (store *Store) SavePeriodEmployee(ctx context.Context, period string, employee payroll.Employee) error {

@@ -123,7 +123,7 @@ const isMac = /Mac/i.test(navigator.platform);
 const employeePatterns = {
   id: "[A-Za-z0-9][A-Za-z0-9._/-]{0,31}",
   cin: "[A-Z]{1,2}[0-9]{3,8}",
-  cnss: "[0-9]{6,12}",
+  cnss: "(?:[0-9]{9})?",
   rib: "[0-9]{24}",
 } as const;
 const demoEmployees: Employee[] = [
@@ -188,8 +188,14 @@ export function validateEmployee(employee: Employee): EmployeeIssue[] {
     )
   )
     add("cin", "Le CIN doit contenir 1 à 2 lettres puis 3 à 8 chiffres.");
-  if (digits(employee.cnss).length < 6 || digits(employee.cnss).length > 12)
-    add("cnss", "Le numéro CNSS doit contenir 6 à 12 chiffres.");
+  if (
+    employee.cnss !== "" &&
+    digits(employee.cnss).length !== 9
+  )
+    add(
+      "cnss",
+      "Le numéro CNSS doit contenir exactement 9 chiffres, ou rester vide pour un nouvel entrant.",
+    );
   if (digits(employee.rib).length !== 24)
     add("rib", "Le RIB marocain doit contenir exactement 24 chiffres.");
   if (employee.daysWorked < 0 || employee.daysWorked > 30)
@@ -1125,13 +1131,14 @@ function PayrollPage({
     }
   }
   async function cnss() {
+    if (!period) return;
     setBusy(true);
     try {
       if (!isNative) {
         notify("Assistant e-BDS disponible dans l’application bureau");
         return;
       }
-      const result = await GenerateCNSSBDS();
+      const result = await GenerateCNSSBDS(period.period);
       notify(
         `BDS généré · ${result.employeeCount} salariés · ${result.entrantCount} entrant(s)`,
       );
@@ -1262,7 +1269,7 @@ function PayrollPage({
         <ActionPanel
           icon="shield"
           title="Générer la déclaration e-BDS"
-          text="Chargez le préétabli CNSS et le CSV mensuel. PaieMaroc contrôle les entrants B04 et les totaux B00–B06."
+          text={`Choisissez uniquement le préétabli CNSS de ${period.period}. Les salaires, jours et nouveaux entrants viennent directement de cette période enregistrée.`}
           button="Ouvrir l’assistant CNSS"
           action={cnss}
           busy={busy}
@@ -2116,14 +2123,14 @@ function EmployeeDialog({
           <TextField
             name="cnss"
             label="N° CNSS"
-            hint="6–12 chiffres"
+            hint="9 chiffres · vide si nouvel entrant"
             value={employee.cnss}
             set={(cnss) =>
               update({ ...employee, cnss: cnss.replace(/[^0-9]/g, "") }, "cnss")
             }
             error={errors.cnss}
             pattern={employeePatterns.cnss}
-            maxLength={12}
+            maxLength={9}
             inputMode="numeric"
           />
           <TextField

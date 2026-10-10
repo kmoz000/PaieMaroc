@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/kmoz000/PaieMaroc/paie-maroc/internal/payroll"
 	"github.com/kmoz000/PaieMaroc/paie-maroc/internal/store"
 )
 
@@ -11,7 +12,7 @@ func TestStorePeriodLifecycleAndCopy(t *testing.T) {
 	t.Parallel()
 	database := openStore(t)
 	ctx := context.Background()
-	employee := validEmployee("EMP-001", "1234567")
+	employee := validEmployee("EMP-001", "168764721")
 	if err := database.Upsert(ctx, employee); err != nil {
 		t.Fatal(err)
 	}
@@ -53,5 +54,39 @@ func TestStorePeriodLifecycleAndCopy(t *testing.T) {
 	remaining, err := database.GetPeriod(ctx, "2026-10")
 	if err != nil || remaining.CopiedFrom != "" {
 		t.Fatalf("remaining period = %+v, %v", remaining, err)
+	}
+}
+
+func TestWalkPeriodEmployeesUsesSelectedMonthValues(t *testing.T) {
+	t.Parallel()
+	database := openStore(t)
+	ctx := context.Background()
+	employee := validEmployee("EMP-001", "168764721")
+	if err := database.Upsert(ctx, employee); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.CreatePeriod(ctx, store.CreatePeriodInput{Period: "2026-09"}); err != nil {
+		t.Fatal(err)
+	}
+	employee.GrossCentimes = 900_000
+	if err := database.SavePeriodEmployee(ctx, "2026-09", employee); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.CreatePeriod(ctx, store.CreatePeriodInput{Period: "2026-10", CopyFrom: "2026-09"}); err != nil {
+		t.Fatal(err)
+	}
+	employee.GrossCentimes = 1_000_000
+	if err := database.SavePeriodEmployee(ctx, "2026-10", employee); err != nil {
+		t.Fatal(err)
+	}
+	var september []payroll.Employee
+	if err := database.WalkPeriodEmployees(ctx, "2026-09", func(item payroll.Employee) error {
+		september = append(september, item)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(september) != 1 || september[0].GrossCentimes != 900_000 {
+		t.Fatalf("September payroll = %+v", september)
 	}
 }

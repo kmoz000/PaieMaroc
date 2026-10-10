@@ -20,7 +20,7 @@ func TestStoreUpsertAndKeysetPagination(t *testing.T) {
 	defer database.Close()
 	ctx := context.Background()
 	for index := 1; index <= 3; index++ {
-		employee := validEmployee(fmt.Sprintf("EMP-%03d", index), fmt.Sprintf("%07d", index))
+		employee := validEmployee(fmt.Sprintf("EMP-%03d", index), fmt.Sprintf("%09d", index))
 		if err := database.Upsert(ctx, employee); err != nil {
 			t.Fatalf("Upsert() error = %v", err)
 		}
@@ -51,8 +51,8 @@ func TestImportCSVStreamsValidRows(t *testing.T) {
 	defer database.Close()
 	csv := strings.Join([]string{
 		"matricule;prenom;nom;cin;cnss;rib;jours;personnes_a_charge;salaire_brut_mad;exonere_mad;avance_mad",
-		"EMP-001;Amine;Alaoui;AB123456;1234567;011780000012345678901234;26;2;8000,50;0;500",
-		"EMP-002;Sara;Bennani;BAD;7654321;022780000098765432109876;26;0;9000;0;0",
+		"EMP-001;Amine;Alaoui;AB123456;168764721;011780000012345678901234;26;2;8000,50;0;500",
+		"EMP-002;Sara;Bennani;BAD;765432103;022780000098765432109876;26;0;9000;0;0",
 	}, "\n")
 	stats, err := database.ImportCSV(context.Background(), strings.NewReader(csv))
 	if err != nil {
@@ -72,7 +72,7 @@ func TestImportCSVForPeriodUpdatesRegisterAndMonth(t *testing.T) {
 	}
 	csv := strings.Join([]string{
 		"matricule;prenom;nom;cin;cnss;rib;jours;personnes_a_charge;salaire_brut_mad;exonere_mad;avance_mad",
-		"EMP-001;Amine;Alaoui;AB123456;1234567;011780000012345678901234;26;2;8000;0;500",
+		"EMP-001;Amine;Alaoui;AB123456;168764721;011780000012345678901234;26;2;8000;0;500",
 	}, "\n")
 	stats, err := database.ImportCSVForPeriod(ctx, "2026-10", strings.NewReader(csv))
 	if err != nil {

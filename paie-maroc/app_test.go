@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -76,6 +78,47 @@ func TestAppEmployeeValidationReturnsFieldCode(t *testing.T) {
 	}
 }
 
+func TestGenerateCNSSBDSUsesOnlySelectedPeriodAndPreEstablishedFile(t *testing.T) {
+	t.Parallel()
+	app := newTestApp(t)
+	if _, err := app.CreateInitialAdmin(auth.CreateInput{
+		Username: "admin", DisplayName: "Admin Paie", Password: "phrase secrète robuste",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.CreatePeriod(store.CreatePeriodInput{Period: "2026-10"}); err != nil {
+		t.Fatal(err)
+	}
+	employees := []payroll.Employee{
+		{ID: "EMP-0001", FirstName: "Amine", LastName: "Alaoui", CIN: "AB123456", CNSS: "168764721", RIB: "011780000012345678901234", DaysWorked: 26, GrossCentimes: 800_000},
+		{ID: "EMP-0002", FirstName: "Sara", LastName: "Bennani", CIN: "BE123456", RIB: "022780000098765432109876", DaysWorked: 20, GrossCentimes: 500_000},
+	}
+	for _, employee := range employees {
+		if err := app.SavePeriodEmployee("2026-10", employee); err != nil {
+			t.Fatal(err)
+		}
+	}
+	preEstablishedPath := t.TempDir() + "/DS_PREETABLI.txt"
+	outputPath := t.TempDir() + "/DS_CNSS_2026-10.txt"
+	if err := os.WriteFile(preEstablishedPath, []byte(appTestPreEstablished()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	result, err := app.generateCNSSBDS("2026-10", preEstablishedPath, outputPath)
+	if err != nil {
+		t.Fatalf("generateCNSSBDS() error = %v", err)
+	}
+	if result.Imported != 2 || result.ExistingCount != 1 || result.EntrantCount != 1 || result.EmployeeCount != 2 {
+		t.Fatalf("generateCNSSBDS() = %+v", result)
+	}
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(content), "B04") || strings.Contains(string(content), "A02") {
+		t.Fatalf("generated BDS does not contain the expected converted records")
+	}
+}
+
 func newTestApp(t *testing.T) *App {
 	t.Helper()
 	database, err := store.Open(t.TempDir() + "/paie-maroc.db")
@@ -84,4 +127,18 @@ func newTestApp(t *testing.T) *App {
 	}
 	t.Cleanup(func() { _ = database.Close() })
 	return &App{ctx: context.Background(), store: database}
+}
+
+func appTestPreEstablished() string {
+	fixed := func(value string, width int) string {
+		return value + strings.Repeat(" ", width-len(value))
+	}
+	a00 := "A00" + "00000000000001" + "A0" + strings.Repeat(" ", 241)
+	a01 := "A01" + "1773341" + "202610" + fixed("ATLAS CONSEIL", 40) + fixed("SERVICES", 40) +
+		fixed("1 RUE ATLAS", 120) + fixed("CASABLANCA", 20) + fixed("20000", 6) + "01" + "20261001" + "20261110"
+	a02 := "A02" + "1773341" + "202610" + "168764721" + fixed("AMINE ALAOUI", 60) +
+		"02" + "030000" + "000000" + "030000" + strings.Repeat(" ", 155)
+	a03 := "A03" + "1773341" + "202610" + "000001" + "000002" + "000000030000" +
+		"000000000000" + "000000030000" + fmt.Sprintf("%015d", 168764721) + strings.Repeat(" ", 181)
+	return strings.Join([]string{a00, a01, a02, a03}, "\n") + "\n"
 }

@@ -6,7 +6,9 @@ Le moteur transforme le fichier préétabli `A00`–`A03` en déclaration `B00`�
 
 Cas gérés : `SO`, `DE`, `IT`, `IL`, `AT`, `CS`, `MS`, `MP`, entrant sans immatriculation (`000000000`) et main-d’œuvre occasionnelle (`999999999`). Les contrôles portent sur l’ordre, les plafonds, les jours, les identifiants, les totaux verticaux et horizontaux et les sommes de contrôle.
 
-Le fichier de saisie attendu est illustré par `examples/declarations-cnss.csv`. `entrant=oui` produit un `B04`; un numéro vide devient `000000000` et exige le nom complet et le CIN. `entrant=non` doit correspondre à un salarié du préétabli. Le champ `salaire_plafonne_mad` est facultatif et vaut par défaut le minimum entre le salaire réel et 6 000 MAD.
+L’utilisateur choisit un seul fichier source : le préétabli CNSS du mois actif. Les jours, salaires, noms et CIN proviennent directement de la période enregistrée dans SQLite. Un salarié présent dans le préétabli produit un `B02`; un salarié de la période absent du préétabli devient automatiquement un entrant `B04`. Un numéro CNSS vide est émis comme `000000000` et exige donc un nom complet et un CIN valides. La période `AAAAMM` du préétabli doit correspondre exactement au mois actif.
+
+L’index de rapprochement est temporaire et stocké sur disque : le traitement ne charge pas toute la paie en mémoire, même pour un effectif important. Le fichier CSV d’exemple reste un fixture technique du moteur historique; il n’est plus demandé dans le parcours utilisateur.
 
 ## Remises bancaires
 
