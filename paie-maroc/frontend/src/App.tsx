@@ -57,6 +57,7 @@ import {
   validateEmployee,
 } from "./employee-validation";
 import type { Employee } from "./employee-validation";
+import {DateField, MonthField} from "./date-picker";
 import "./App.css";
 
 type User = {
@@ -1292,28 +1293,24 @@ function PayrollPage({
           label="NET À PAYER"
           value={money(batch.netTotalCentimes)}
           detail="Virements du mois"
-          tone="brand"
           icon="send"
         />
         <Metric
           label="MASSE SALARIALE"
           value={money(batch.grossTotalCentimes)}
           detail="Brut mensuel"
-          tone="blue"
           icon="calc"
         />
         <Metric
           label="CHARGES EMPLOYEUR"
           value={money(batch.employerChargesTotal)}
           detail="CNSS · AMO · AF · TFP"
-          tone="amber"
           icon="shield"
         />
         <Metric
           label="COLLABORATEURS"
           value={String(period.employeeCount || employees.length)}
           detail={`${employees.length} chargé(s) à l’écran`}
-          tone="green"
           icon="users"
         />
       </div>
@@ -1999,8 +1996,8 @@ function AttendancePage({
       {view === "journal" && (
         <>
           <section className="panel attendance-filters">
-            <TextField label="Du" type="date" value={filter.from} set={(from) => setFilter({ ...filter, from })} compact />
-            <TextField label="Au" type="date" value={filter.to} set={(to) => setFilter({ ...filter, to })} compact />
+            <DateField label="Du" value={filter.from} set={(from) => setFilter({ ...filter, from })} compact />
+            <DateField label="Au" value={filter.to} set={(to) => setFilter({ ...filter, to })} compact />
             <SelectField label="Salarié" value={filter.employeeId} set={(employeeId) => setFilter({ ...filter, employeeId })} compact required={false}>
               <option value="">Tous les salariés</option>
               {employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.firstName} {employee.lastName}</option>)}
@@ -2084,7 +2081,7 @@ function AttendancePage({
           </section>
           <form className="panel holiday-form" onSubmit={saveHoliday}>
             <span className="eyebrow">RÈGLE EXCEPTIONNELLE</span><h2>Ajouter un jour spécial</h2>
-            <TextField label="Date" type="date" value={holidayDraft.date} set={(date) => setHolidayDraft({ ...holidayDraft, date })} />
+            <DateField label="Date" value={holidayDraft.date} set={(date) => setHolidayDraft({ ...holidayDraft, date })} />
             <TextField label="Libellé" value={holidayDraft.name} set={(name) => setHolidayDraft({ ...holidayDraft, name })} placeholder="Ex. inventaire annuel" />
             <SelectField label="Type" value={holidayDraft.kind} set={(kind) => setHolidayDraft({ ...holidayDraft, kind: kind as Holiday["kind"] })}>
               <option value="company">Jour spécial entreprise</option><option value="religious">Fête religieuse</option><option value="national">Fête nationale</option>
@@ -2163,6 +2160,7 @@ function AttendancePunchDialog({
     [reason, setReason] = useState(""),
     [history, setHistory] = useState<{ id: number; action: string; reason: string; changedBy: string; changedAt: string }[]>([]),
     [error, setError] = useState("");
+  const [occurredDate, occurredTime = ""] = occurredAt.split("T");
   useEffect(() => {
     if (value?.id && isNative) ListAttendancePunchChanges(value.id).then((rows) => setHistory(rows as typeof history)).catch(() => undefined);
   }, [value?.id]);
@@ -2195,7 +2193,10 @@ function AttendancePunchDialog({
           <SelectField label="Salarié" value={employeeId} set={setEmployeeId}>
             <option value="">Choisir…</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.firstName} {employee.lastName} · {employee.id}</option>)}
           </SelectField>
-          <TextField label="Date et heure" type="datetime-local" value={occurredAt} set={setOccurredAt} />
+          <div className="date-time-fields">
+            <DateField label="Date" value={occurredDate} set={(date) => setOccurredAt(`${date}T${occurredTime || "08:00"}`)} />
+            <TextField label="Heure" type="time" value={occurredTime} set={(time) => setOccurredAt(`${occurredDate}T${time}`)} />
+          </div>
           <SelectField label="Sens" value={direction} set={(next) => setDirection(next as Punch["direction"])}>
             <option value="entry">Entrée</option><option value="exit">Sortie</option><option value="unknown">À qualifier</option>
           </SelectField>
@@ -2816,12 +2817,7 @@ function PeriodDialog({
           title="Créer un mois"
           close={close}
         />
-        <TextField
-          label="Période"
-          value={period}
-          set={setPeriod}
-          type="month"
-        />
+        <MonthField label="Période" value={period} set={setPeriod} />
         <SelectField
           label="Reprendre les salaires de"
           value={source}
@@ -2858,21 +2854,19 @@ function Metric({
   label,
   value,
   detail,
-  tone,
   icon,
 }: {
   label: string;
   value: string;
   detail: string;
-  tone: string;
   icon: string;
 }) {
   return (
     <article className="panel metric">
       <div>
         <span>{label}</span>
-        <i className={tone}>
-          <Icon name={icon} />
+        <i className="metric-icon" aria-hidden="true">
+          <Icon name={icon} size={16} />
         </i>
       </div>
       <strong>{value}</strong>

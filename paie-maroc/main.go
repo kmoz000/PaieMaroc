@@ -28,6 +28,8 @@ func main() {
 			Assets: assets,
 		},
 		BackgroundColour: &options.RGBA{R: 2, G: 58, B: 116, A: 1},
+		// Production builds keep the native webview context menu and inspector hidden.
+		EnableDefaultContextMenu: false,
 		Mac: &mac.Options{
 			TitleBar: mac.TitleBarHiddenInset(),
 		},
