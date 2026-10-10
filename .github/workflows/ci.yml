@@ -29,12 +29,12 @@ jobs:
       - name: Installer le frontend
         run: npm ci
         working-directory: paie-maroc/frontend
+      - name: Compiler le frontend
+        run: npm run build
+        working-directory: paie-maroc/frontend
       - name: Vérifier le format Go
         run: test -z "$(gofmt -l .)"
       - name: Analyser le code Go
         run: go vet ./...
       - name: Tester avec le détecteur de courses
         run: go test -race -coverprofile=coverage.out ./...
-      - name: Compiler le frontend
-        run: npm run build
-        working-directory: paie-maroc/frontend
