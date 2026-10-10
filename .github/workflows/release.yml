@@ -74,6 +74,9 @@ jobs:
       - name: Tester le frontend
         run: npm test
         working-directory: paie-maroc/frontend
+      - name: Compiler le frontend pour les tests Go embarqués
+        run: npm run build
+        working-directory: paie-maroc/frontend
       - name: Tester avant emballage
         run: go test ./...
 
