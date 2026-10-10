@@ -86,24 +86,28 @@ jobs:
         run: |
           $certificate = Join-Path $env:RUNNER_TEMP 'paie-maroc-authenticode.pfx'
           $publicCertificate = Join-Path $env:RUNNER_TEMP 'paie-maroc-authenticode.cer'
+          $privateKey = Join-Path $env:RUNNER_TEMP 'paie-maroc-authenticode.key.pem'
+          $pemCertificate = Join-Path $env:RUNNER_TEMP 'paie-maroc-authenticode.cert.pem'
           $passwordPlain = [Guid]::NewGuid().ToString('N')
-          $password = ConvertTo-SecureString $passwordPlain -AsPlainText -Force
-          Write-Host 'Création de la clé Authenticode provisoire'
-          $signer = New-SelfSignedCertificate `
-            -Type CodeSigningCert `
-            -Subject 'CN=PaieMaroc Provisional Release, O=PaieMaroc, C=MA' `
-            -KeyAlgorithm RSA `
-            -KeyLength 2048 `
-            -HashAlgorithm SHA256 `
-            -KeyExportPolicy Exportable `
-            -CertStoreLocation 'Cert:\CurrentUser\My' `
-            -NotAfter (Get-Date).AddYears(3)
-          Write-Host 'Export du certificat et de sa clé privée'
-          Export-PfxCertificate -Cert $signer -FilePath $certificate -Password $password | Out-Null
-          Export-Certificate -Cert $signer -FilePath $publicCertificate | Out-Null
+          $openssl = (Get-Command openssl.exe -ErrorAction Stop).Source
+          Write-Host 'Création OpenSSL de la clé Authenticode provisoire'
+          & $openssl req -x509 -newkey rsa:2048 -sha256 -days 1095 -nodes `
+            -keyout $privateKey -out $pemCertificate `
+            -subj '/C=MA/O=PaieMaroc/CN=PaieMaroc Provisional Release' `
+            -addext 'keyUsage=critical,digitalSignature' `
+            -addext 'extendedKeyUsage=codeSigning'
+          if ($LASTEXITCODE -ne 0) { throw "Impossible de créer le certificat provisoire." }
+          & $openssl pkcs12 -export -out $certificate -inkey $privateKey `
+            -in $pemCertificate -passout "pass:$passwordPlain" `
+            -name 'PaieMaroc Provisional Release'
+          if ($LASTEXITCODE -ne 0) { throw "Impossible de créer le paquet PFX." }
+          & $openssl x509 -in $pemCertificate -outform der -out $publicCertificate
+          if ($LASTEXITCODE -ne 0) { throw "Impossible d'exporter le certificat public." }
+          Remove-Item $privateKey, $pemCertificate -Force
           Write-Host 'Ajout non interactif au magasin de confiance temporaire'
           & certutil.exe -user -f -addstore Root $publicCertificate | Out-Null
           if ($LASTEXITCODE -ne 0) { throw "Impossible d'ajouter le certificat au magasin racine temporaire." }
+          $signer = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($publicCertificate)
           "PAIEMAROC_CERTIFICATE_PATH=$certificate" | Out-File -FilePath $env:GITHUB_ENV -Append
           "PAIEMAROC_SELF_SIGNED=true" | Out-File -FilePath $env:GITHUB_ENV -Append
           "PAIEMAROC_SELF_SIGNED_THUMBPRINT=$($signer.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Append
@@ -131,7 +135,6 @@ jobs:
           & "$env:GITHUB_WORKSPACE\paie-maroc\scripts\sign-windows.ps1" $installer.FullName -VerifyOnly
           Remove-Item $env:PAIEMAROC_CERTIFICATE_PATH -Force
           Remove-Item "Cert:\CurrentUser\Root\$env:PAIEMAROC_SELF_SIGNED_THUMBPRINT" -Force
-          Remove-Item "Cert:\CurrentUser\My\$env:PAIEMAROC_SELF_SIGNED_THUMBPRINT" -Force
 
       - name: Compiler macOS universel
         if: runner.os == 'macOS'
