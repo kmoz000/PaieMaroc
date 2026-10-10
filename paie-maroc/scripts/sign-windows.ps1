@@ -38,6 +38,20 @@ if (-not $VerifyOnly) {
     }
 }
 
+if ($env:PAIEMAROC_SELF_SIGNED -eq 'true') {
+    $signature = Get-AuthenticodeSignature -LiteralPath $Path
+    $acceptedStatuses = @('Valid', 'NotTrusted')
+    if ($signature.Status.ToString() -notin $acceptedStatuses) {
+        throw "Signature Authenticode invalide pour $Path : $($signature.Status)"
+    }
+    if (-not $signature.SignerCertificate -or
+        $signature.SignerCertificate.Thumbprint -ne $env:PAIEMAROC_SELF_SIGNED_THUMBPRINT) {
+        throw "Le certificat Authenticode de $Path ne correspond pas au certificat provisoire attendu."
+    }
+    Write-Host "Signature auto-signée vérifiée ($($signature.Status)) : $Path"
+    return
+}
+
 & $signTool.FullName verify /pa /all /v $Path
 if ($LASTEXITCODE -ne 0) {
     throw "Échec de la vérification Authenticode de $Path"
