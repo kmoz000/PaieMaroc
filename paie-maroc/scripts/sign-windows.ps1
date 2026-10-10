@@ -57,6 +57,7 @@ if ($env:PAIEMAROC_SELF_SIGNED -eq 'true') {
         throw "Échec de la vérification Authenticode de $Path"
     }
     Write-Host "Signature auto-signée et empreinte vérifiées : $Path"
+    $global:LASTEXITCODE = 0
     return
 }
 
