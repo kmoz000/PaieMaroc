@@ -39,25 +39,24 @@ if (-not $VerifyOnly) {
 }
 
 if ($env:PAIEMAROC_SELF_SIGNED -eq 'true') {
-    if ($PSVersionTable.PSEdition -eq 'Core') {
-        $windowsPowerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-        & $windowsPowerShell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass `
-            -File $PSCommandPath -Path $Path -VerifyOnly
-        if ($LASTEXITCODE -ne 0) {
-            throw "Échec de la vérification Authenticode Windows de $Path"
-        }
+    if (-not $VerifyOnly) {
+        Write-Host "Signature auto-signée créée : $Path"
         return
     }
-    $signature = Get-AuthenticodeSignature -LiteralPath $Path
-    $acceptedStatuses = @('Valid', 'NotTrusted')
-    if ($signature.Status.ToString() -notin $acceptedStatuses) {
-        throw "Signature Authenticode invalide pour $Path : $($signature.Status)"
+
+    $verification = @(& $signTool.FullName verify /pa /all /v $Path 2>&1)
+    $verifyExitCode = $LASTEXITCODE
+    $verifyText = $verification -join "`n"
+    $verification | ForEach-Object { Write-Host $_ }
+    $normalizedText = $verifyText -replace '\s', ''
+    if ($normalizedText -notmatch [regex]::Escape($env:PAIEMAROC_SELF_SIGNED_THUMBPRINT)) {
+        throw "L'empreinte Authenticode de $Path ne correspond pas au certificat provisoire attendu."
     }
-    if (-not $signature.SignerCertificate -or
-        $signature.SignerCertificate.Thumbprint -ne $env:PAIEMAROC_SELF_SIGNED_THUMBPRINT) {
-        throw "Le certificat Authenticode de $Path ne correspond pas au certificat provisoire attendu."
+    if ($verifyExitCode -ne 0 -and
+        $normalizedText -notmatch 'rootcertificate.*nottrusted') {
+        throw "Échec de la vérification Authenticode de $Path"
     }
-    Write-Host "Signature auto-signée vérifiée ($($signature.Status)) : $Path"
+    Write-Host "Signature auto-signée et empreinte vérifiées : $Path"
     return
 }
 
