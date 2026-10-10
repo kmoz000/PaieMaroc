@@ -36,12 +36,60 @@ func TestAttendanceJournalImportIsIdempotentAndReconcilesLinks(t *testing.T) {
 	if err != nil || second.Imported != 0 || second.Ignored != 1 {
 		t.Fatalf("second import = %+v, %v", second, err)
 	}
+	cursor, err := database.LastAttendanceSync(ctx, device.ID)
+	if err != nil || !cursor.Equal(at) {
+		t.Fatalf("duplicate import moved cursor: %v, %v", cursor, err)
+	}
 	if err := database.LinkAttendanceEmployee(ctx, device.ID, "EMP-001", "42"); err != nil {
 		t.Fatal(err)
 	}
 	page, err := database.ListAttendancePunches(ctx, attendance.PunchFilter{From: "2026-10-01", To: "2026-10-31", Limit: 50})
 	if err != nil || page.Total != 1 || page.Unlinked != 0 || page.Items[0].EmployeeID != "EMP-001" {
 		t.Fatalf("page = %+v, %v", page, err)
+	}
+}
+
+func TestAttendanceStreamingSessionAdvancesCursorOnlyWhenCompleted(t *testing.T) {
+	t.Parallel()
+	database := openStore(t)
+	ctx := context.Background()
+	device, err := database.SaveAttendanceDevice(ctx, attendance.Device{
+		Name: "Entrée", Model: "MB10-VL", Protocol: attendance.ProtocolStandalone,
+		Host: "192.168.1.201", Port: 4370, Enabled: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	initial := time.Date(2026, 10, 10, 8, 0, 0, 0, time.Local)
+	if _, err := database.ImportAttendancePunches(ctx, device.ID, []attendance.RawPunch{{
+		ExternalID: "1", DeviceUserID: "1", OccurredAt: initial,
+		Direction: attendance.DirectionEntry, Verification: attendance.VerificationCard,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	session, err := database.BeginAttendanceImport(ctx, device.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	later := initial.Add(time.Hour)
+	result, err := session.ImportBatch(ctx, []attendance.RawPunch{{
+		ExternalID: "2", DeviceUserID: "2", OccurredAt: later,
+		Direction: attendance.DirectionExit, Verification: attendance.VerificationFingerprint,
+	}})
+	if err != nil || result.Imported != 1 {
+		t.Fatalf("batch result = %+v, %v", result, err)
+	}
+	cursor, err := database.LastAttendanceSync(ctx, device.ID)
+	if err != nil || !cursor.Equal(initial) {
+		t.Fatalf("partial import moved cursor: %v, %v", cursor, err)
+	}
+	if err := database.CompleteAttendanceSync(ctx, device.ID, later); err != nil {
+		t.Fatal(err)
+	}
+	cursor, err = database.LastAttendanceSync(ctx, device.ID)
+	if err != nil || !cursor.Equal(later) {
+		t.Fatalf("completed cursor = %v, %v", cursor, err)
 	}
 }
 

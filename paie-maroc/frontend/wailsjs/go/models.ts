@@ -247,6 +247,7 @@ export namespace attendance {
 	export class SyncResult {
 	    deviceId: number;
 	    read: number;
+	    skipped: number;
 	    imported: number;
 	    ignored: number;
 	    unlinked: number;
@@ -260,6 +261,7 @@ export namespace attendance {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.deviceId = source["deviceId"];
 	        this.read = source["read"];
+	        this.skipped = source["skipped"];
 	        this.imported = source["imported"];
 	        this.ignored = source["ignored"];
 	        this.unlinked = source["unlinked"];

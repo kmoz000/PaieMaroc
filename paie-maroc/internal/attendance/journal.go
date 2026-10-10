@@ -90,6 +90,7 @@ type RawPunch struct {
 type SyncResult struct {
 	DeviceID int64  `json:"deviceId"`
 	Read     int64  `json:"read"`
+	Skipped  int64  `json:"skipped"`
 	Imported int64  `json:"imported"`
 	Ignored  int64  `json:"ignored"`
 	Unlinked int64  `json:"unlinked"`

@@ -3,7 +3,6 @@ module github.com/kmoz000/PaieMaroc/paie-maroc
 go 1.27.2
 
 require (
-	github.com/farizfadian/go-zkteco v0.1.0
 	github.com/wailsapp/wails/v2 v2.15.0
 	golang.org/x/crypto v0.53.0
 	modernc.org/sqlite v1.60.1

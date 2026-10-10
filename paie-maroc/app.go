@@ -747,12 +747,31 @@ func (app *App) syncAttendanceDevice(ctx context.Context, deviceID int64) (atten
 	if err != nil {
 		return attendance.SyncResult{}, err
 	}
-	raw, err := attendance.PullStandalone(ctx, device, since.Add(-time.Minute))
+	importSession, err := app.store.BeginAttendanceImport(ctx, deviceID)
 	if err != nil {
-		app.store.RecordAttendanceSyncError(ctx, deviceID, err)
 		return attendance.SyncResult{}, err
 	}
-	return app.store.ImportAttendancePunches(ctx, deviceID, raw)
+	result := attendance.SyncResult{DeviceID: deviceID}
+	readStats, err := attendance.StreamStandalone(ctx, device, since.Add(-time.Minute), func(batch []attendance.RawPunch) error {
+		batchResult, importErr := importSession.ImportBatch(ctx, batch)
+		result.Imported += batchResult.Imported
+		result.Ignored += batchResult.Ignored
+		result.Unlinked += batchResult.Unlinked
+		return importErr
+	})
+	result.Read = readStats.Read
+	result.Skipped = readStats.Skipped
+	if err != nil {
+		app.store.RecordAttendanceSyncError(ctx, deviceID, err)
+		return result, err
+	}
+	if err := app.store.CompleteAttendanceSync(ctx, deviceID, readStats.Latest); err != nil {
+		app.store.RecordAttendanceSyncError(ctx, deviceID, err)
+		return result, err
+	}
+	result.Message = fmt.Sprintf("%d nouveau(x), %d déjà présent(s), %d non lié(s), %d rejeté(s)",
+		result.Imported, result.Ignored, result.Unlinked, result.Skipped)
+	return result, nil
 }
 
 func (app *App) startAttendanceAutoSync(parent context.Context) {

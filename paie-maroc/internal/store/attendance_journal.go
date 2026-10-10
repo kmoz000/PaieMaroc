@@ -283,29 +283,45 @@ func (store *Store) LastAttendanceSync(ctx context.Context, deviceID int64) (tim
 	return parsed, nil
 }
 
-func (store *Store) ImportAttendancePunches(ctx context.Context, deviceID int64, raw []attendance.RawPunch) (attendance.SyncResult, error) {
-	result := attendance.SyncResult{DeviceID: deviceID, Read: int64(len(raw))}
-	tx, err := store.db.BeginTx(ctx, nil)
+// AttendanceImportSession caches employee links once while committing each
+// bounded device batch independently. A failed transfer can therefore resume
+// safely without retaining the complete device journal in memory.
+type AttendanceImportSession struct {
+	store    *Store
+	deviceID int64
+	links    map[string]string
+}
+
+func (store *Store) BeginAttendanceImport(ctx context.Context, deviceID int64) (*AttendanceImportSession, error) {
+	links := make(map[string]string)
+	rows, err := store.db.QueryContext(ctx, `SELECT device_user_id, employee_id FROM attendance_employee_links WHERE device_id = ?`, deviceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var userID, employeeID string
+		if err := rows.Scan(&userID, &employeeID); err != nil {
+			return nil, err
+		}
+		links[userID] = employeeID
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return &AttendanceImportSession{store: store, deviceID: deviceID, links: links}, nil
+}
+
+func (session *AttendanceImportSession) ImportBatch(ctx context.Context, raw []attendance.RawPunch) (attendance.SyncResult, error) {
+	result := attendance.SyncResult{DeviceID: session.deviceID, Read: int64(len(raw))}
+	if len(raw) == 0 {
+		return result, nil
+	}
+	tx, err := session.store.db.BeginTx(ctx, nil)
 	if err != nil {
 		return result, err
 	}
 	defer tx.Rollback()
-	links := map[string]string{}
-	rows, err := tx.QueryContext(ctx, `SELECT device_user_id, employee_id FROM attendance_employee_links WHERE device_id = ?`, deviceID)
-	if err != nil {
-		return result, err
-	}
-	for rows.Next() {
-		var userID, employeeID string
-		if err := rows.Scan(&userID, &employeeID); err != nil {
-			rows.Close()
-			return result, err
-		}
-		links[userID] = employeeID
-	}
-	if err := rows.Close(); err != nil {
-		return result, err
-	}
 	statement, err := tx.PrepareContext(ctx, `INSERT INTO attendance_punches
 		(device_id, employee_id, device_user_id, external_id, occurred_at, direction, verification, source)
 		VALUES (?, NULLIF(?, ''), ?, ?, ?, ?, ?, 'device') ON CONFLICT(device_id, external_id) DO NOTHING`)
@@ -313,13 +329,12 @@ func (store *Store) ImportAttendancePunches(ctx context.Context, deviceID int64,
 		return result, err
 	}
 	defer statement.Close()
-	latest := time.Date(2000, 1, 1, 0, 0, 0, 0, time.Local)
 	for _, punch := range raw {
 		if err := ctx.Err(); err != nil {
 			return result, err
 		}
-		employeeID := links[punch.DeviceUserID]
-		execResult, err := statement.ExecContext(ctx, deviceID, employeeID, punch.DeviceUserID,
+		employeeID := session.links[punch.DeviceUserID]
+		execResult, err := statement.ExecContext(ctx, session.deviceID, employeeID, punch.DeviceUserID,
 			punch.ExternalID, punch.OccurredAt.Format(time.RFC3339), punch.Direction, punch.Verification)
 		if err != nil {
 			return result, fmt.Errorf("import du pointage: %w", err)
@@ -333,25 +348,58 @@ func (store *Store) ImportAttendancePunches(ctx context.Context, deviceID int64,
 		if employeeID == "" {
 			result.Unlinked++
 		}
+	}
+	if err := tx.Commit(); err != nil {
+		return result, err
+	}
+	return result, nil
+}
+
+func (store *Store) CompleteAttendanceSync(ctx context.Context, deviceID int64, latest time.Time) error {
+	latestValue := ""
+	if !latest.IsZero() {
+		latestValue = latest.Format(time.RFC3339)
+	}
+	tx, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `INSERT INTO attendance_sync_state(device_id, last_synced_at, last_error)
+		VALUES (?, NULLIF(?, ''), '') ON CONFLICT(device_id) DO UPDATE SET
+		last_synced_at = CASE
+			WHEN excluded.last_synced_at IS NULL THEN attendance_sync_state.last_synced_at
+			WHEN attendance_sync_state.last_synced_at IS NULL THEN excluded.last_synced_at
+			WHEN unixepoch(excluded.last_synced_at) > unixepoch(attendance_sync_state.last_synced_at) THEN excluded.last_synced_at
+			ELSE attendance_sync_state.last_synced_at END,
+		last_error = '', updated_at = CURRENT_TIMESTAMP`, deviceID, latestValue); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE attendance_devices SET last_status = 'online',
+		last_checked_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, deviceID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// ImportAttendancePunches remains the convenient atomic API for tests and
+// small adapters. Standalone device synchronization uses the streaming session.
+func (store *Store) ImportAttendancePunches(ctx context.Context, deviceID int64, raw []attendance.RawPunch) (attendance.SyncResult, error) {
+	session, err := store.BeginAttendanceImport(ctx, deviceID)
+	if err != nil {
+		return attendance.SyncResult{DeviceID: deviceID}, err
+	}
+	result, err := session.ImportBatch(ctx, raw)
+	if err != nil {
+		return result, err
+	}
+	var latest time.Time
+	for _, punch := range raw {
 		if punch.OccurredAt.After(latest) {
 			latest = punch.OccurredAt
 		}
 	}
-	if latest.Year() == 2000 {
-		latest = time.Now()
-	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO attendance_sync_state(device_id, last_synced_at, last_error)
-		VALUES (?, ?, '') ON CONFLICT(device_id) DO UPDATE SET last_synced_at = excluded.last_synced_at,
-		last_error = '', updated_at = CURRENT_TIMESTAMP`, deviceID, latest.Format(time.RFC3339))
-	if err != nil {
-		return result, err
-	}
-	_, err = tx.ExecContext(ctx, `UPDATE attendance_devices SET last_status = 'online',
-		last_checked_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, deviceID)
-	if err != nil {
-		return result, err
-	}
-	if err := tx.Commit(); err != nil {
+	if err := store.CompleteAttendanceSync(ctx, deviceID, latest); err != nil {
 		return result, err
 	}
 	result.Message = fmt.Sprintf("%d nouveau(x), %d déjà présent(s), %d non lié(s)", result.Imported, result.Ignored, result.Unlinked)
