@@ -86,7 +86,16 @@ ManifestDPIAware true
 
 Name "${INFO_PRODUCTNAME}"
 OutFile "..\..\bin\${INFO_PROJECTNAME}-${ARCH}-installer.exe" # Name of the installer's file.
-InstallDir "$PROGRAMFILES64\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}" # Default installing folder ($PROGRAMFILES is Program Files folder).
+!ifdef WAILS_INSTALL_SCOPE
+  !if "${WAILS_INSTALL_SCOPE}" == "user"
+    # A non-elevated installer must only write inside the current user's profile.
+    InstallDir "$LOCALAPPDATA\Programs\${INFO_PRODUCTNAME}"
+  !else
+    InstallDir "$PROGRAMFILES64\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}"
+  !endif
+!else
+  InstallDir "$PROGRAMFILES64\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}"
+!endif
 ShowInstDetails show # This will always show the installation details.
 
 Function .onInit

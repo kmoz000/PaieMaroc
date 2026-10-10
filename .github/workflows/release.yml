@@ -141,6 +141,47 @@ jobs:
           if ($installers.Count -ne 1) { throw "Installateur auto-signé introuvable ou ambigu." }
           $installer = $installers[0]
           & "$env:GITHUB_WORKSPACE\paie-maroc\scripts\sign-windows.ps1" $installer.FullName -VerifyOnly
+
+      - name: Tester l'installation Windows sans privilèges administrateur
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installer = @(Get-ChildItem build/bin/*-SELF-SIGNED-Setup.exe)[0]
+          $process = Start-Process -FilePath $installer.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($process.ExitCode -ne 0) {
+            throw "L'installation silencieuse a échoué (code $($process.ExitCode))."
+          }
+
+          $uninstallRoots = @(Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall')
+          $entry = $uninstallRoots |
+            Get-ItemProperty |
+            Where-Object { $_.DisplayName -eq 'PaieMaroc' } |
+            Select-Object -First 1
+          if ($null -eq $entry) {
+            throw "PaieMaroc n'est pas enregistré comme application de l'utilisateur courant."
+          }
+          if (-not $entry.DisplayIcon.StartsWith("$env:LOCALAPPDATA\Programs\PaieMaroc\")) {
+            throw "Dossier d'installation inattendu: $($entry.DisplayIcon)"
+          }
+          if (-not (Test-Path $entry.DisplayIcon -PathType Leaf)) {
+            throw "L'exécutable installé est introuvable: $($entry.DisplayIcon)"
+          }
+          & "$env:GITHUB_WORKSPACE\paie-maroc\scripts\sign-windows.ps1" $entry.DisplayIcon -VerifyOnly
+
+          $uninstaller = Join-Path (Split-Path $entry.DisplayIcon) 'uninstall.exe'
+          $uninstall = Start-Process -FilePath $uninstaller -ArgumentList '/S' -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) {
+            throw "La désinstallation silencieuse a échoué (code $($uninstall.ExitCode))."
+          }
+          Start-Sleep -Seconds 2
+          if (Test-Path $entry.DisplayIcon) {
+            throw "L'exécutable existe encore après désinstallation."
+          }
+
+      - name: Supprimer le certificat Windows éphémère
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
           Remove-Item $env:PAIEMAROC_CERTIFICATE_PATH, $env:PAIEMAROC_PUBLIC_CERTIFICATE_PATH -Force
 
       - name: Compiler macOS universel
