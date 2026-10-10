@@ -22,7 +22,7 @@ jobs:
   build:
     name: ${{ matrix.label }}
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         include:
           - os: windows-latest
@@ -68,6 +68,16 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
       - name: Installer Wails
         run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+      - name: Installer NSIS sous Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install nsis --yes --no-progress
+          $nsis = Join-Path ${env:ProgramFiles(x86)} 'NSIS'
+          if (-not (Test-Path (Join-Path $nsis 'makensis.exe'))) {
+            throw "makensis.exe est introuvable après l'installation de NSIS."
+          }
+          $nsis | Out-File -FilePath $env:GITHUB_PATH -Append
       - name: Installer le frontend
         run: npm ci
         working-directory: paie-maroc/frontend
