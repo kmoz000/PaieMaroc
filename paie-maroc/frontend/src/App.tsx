@@ -2822,7 +2822,7 @@ function PointerConnectivityPanel({
             {draft.wireGuard.enabled && <>
               <div className="pointer-grid wireguard-grid">
                 <TextField label="Adresse privée PaieMaroc" value={draft.wireGuard.address} set={(address) => setDraft({ ...draft, wireGuard: { ...draft.wireGuard, address } })} placeholder="10.77.0.2/32" />
-                <TextField label="Passerelle WireGuard" value={draft.wireGuard.endpoint} set={(endpoint) => setDraft({ ...draft, wireGuard: { ...draft.wireGuard, endpoint } })} placeholder="vpn.societe.ma:51820" />
+                <TextField label="Passerelle WireGuard" value={draft.wireGuard.endpoint} set={(endpoint) => setDraft({ ...draft, wireGuard: { ...draft.wireGuard, endpoint } })} placeholder="vpn.societe.ma:51820" hint="Nom DNS ou adresse IP — résolution automatique au démarrage" />
                 <TextField label="Clé publique de la passerelle" value={draft.wireGuard.peerPublicKey} set={(peerPublicKey) => setDraft({ ...draft, wireGuard: { ...draft.wireGuard, peerPublicKey } })} />
                 <TextField label="Sous-réseaux distants des pointeuses" value={draft.wireGuard.allowedIPs.join(", ")} set={(value) => setDraft({ ...draft, wireGuard: { ...draft.wireGuard, allowedIPs: networkList(value) } })} hint="Les routes par défaut sont refusées" placeholder="10.90.0.0/24" />
                 <TextField label="Nouvelle clé privée" type="password" value={draft.wireGuard.privateKey || ""} set={(privateKey) => setDraft({ ...draft, wireGuard: { ...draft.wireGuard, privateKey } })} required={!status?.config.wireGuard.hasPrivateKey} autoComplete="new-password" hint={status?.config.wireGuard.hasPrivateKey ? "Laisser vide pour conserver la clé protégée" : "Générez une identité ci-dessous"} />

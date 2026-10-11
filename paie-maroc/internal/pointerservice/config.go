@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 
 	"golang.org/x/crypto/curve25519"
@@ -172,14 +173,56 @@ func ValidateConfig(config Config) (Config, error) {
 			return Config{}, err
 		}
 	}
-	endpointHost, endpointPort, err := net.SplitHostPort(config.WireGuard.Endpoint)
-	if err != nil || strings.TrimSpace(endpointHost) == "" || endpointPort == "" {
-		return Config{}, errors.New("le point de terminaison WireGuard doit être au format hôte:port")
+	endpointHost, endpointPort, err := validateWireGuardEndpoint(config.WireGuard.Endpoint)
+	if err != nil {
+		return Config{}, err
 	}
+	config.WireGuard.Endpoint = net.JoinHostPort(endpointHost, endpointPort)
 	if len(allowedIPs) == 0 {
 		return Config{}, errors.New("ajoutez au moins un sous-réseau distant réservé aux pointeuses")
 	}
 	return config, nil
+}
+
+func validateWireGuardEndpoint(value string) (string, string, error) {
+	host, portText, err := net.SplitHostPort(strings.TrimSpace(value))
+	if err != nil || strings.TrimSpace(host) == "" || portText == "" {
+		return "", "", errors.New("le point de terminaison WireGuard doit être au format hôte:port")
+	}
+	host = strings.TrimSpace(host)
+	port, err := strconv.Atoi(portText)
+	if err != nil || port < 1 || port > 65535 {
+		return "", "", errors.New("le port du point de terminaison WireGuard doit être compris entre 1 et 65535")
+	}
+	if address, parseErr := netip.ParseAddr(host); parseErr == nil {
+		if address.IsUnspecified() || address.IsMulticast() {
+			return "", "", errors.New("l’adresse du point de terminaison WireGuard n’est pas utilisable")
+		}
+		return address.String(), strconv.Itoa(port), nil
+	}
+	host = strings.TrimSuffix(strings.ToLower(host), ".")
+	if !isDNSHostname(host) {
+		return "", "", errors.New("le nom DNS du point de terminaison WireGuard est invalide")
+	}
+	return host, strconv.Itoa(port), nil
+}
+
+func isDNSHostname(host string) bool {
+	if host == "" || len(host) > 253 {
+		return false
+	}
+	for _, label := range strings.Split(host, ".") {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, character := range label {
+			if (character >= 'a' && character <= 'z') || (character >= '0' && character <= '9') || character == '-' {
+				continue
+			}
+			return false
+		}
+	}
+	return true
 }
 
 func Public(config Config) PublicConfig {

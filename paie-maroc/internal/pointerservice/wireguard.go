@@ -7,6 +7,7 @@ import (
 	"net/netip"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.zx2c4.com/wireguard/conn"
 	"golang.zx2c4.com/wireguard/device"
@@ -19,6 +20,12 @@ type userspaceTunnel struct {
 	mu     sync.RWMutex
 	device *device.Device
 	net    *netstack.Net
+}
+
+const endpointResolutionTimeout = 5 * time.Second
+
+type endpointResolver interface {
+	LookupNetIP(context.Context, string, string) ([]netip.Addr, error)
 }
 
 func newUserspaceTunnel(config WireGuardConfig) (*userspaceTunnel, error) {
@@ -41,6 +48,13 @@ func newUserspaceTunnel(config WireGuardConfig) (*userspaceTunnel, error) {
 		wgDevice.Close()
 		return nil, err
 	}
+	resolutionContext, cancelResolution := context.WithTimeout(context.Background(), endpointResolutionTimeout)
+	resolvedEndpoint, err := resolveWireGuardEndpoint(resolutionContext, config.Endpoint, net.DefaultResolver)
+	cancelResolution()
+	if err != nil {
+		wgDevice.Close()
+		return nil, err
+	}
 	var ipc strings.Builder
 	fmt.Fprintf(&ipc, "private_key=%s\nreplace_peers=true\npublic_key=%s\n", privateKey, peerKey)
 	if config.PresharedKey != "" {
@@ -51,7 +65,7 @@ func newUserspaceTunnel(config WireGuardConfig) (*userspaceTunnel, error) {
 		}
 		fmt.Fprintf(&ipc, "preshared_key=%s\n", presharedKey)
 	}
-	fmt.Fprintf(&ipc, "endpoint=%s\npersistent_keepalive_interval=%d\n", config.Endpoint, config.PersistentKeepaliveSeconds)
+	fmt.Fprintf(&ipc, "endpoint=%s\npersistent_keepalive_interval=%d\n", resolvedEndpoint, config.PersistentKeepaliveSeconds)
 	for _, allowedIP := range config.AllowedIPs {
 		fmt.Fprintf(&ipc, "allowed_ip=%s\n", allowedIP)
 	}
@@ -64,6 +78,27 @@ func newUserspaceTunnel(config WireGuardConfig) (*userspaceTunnel, error) {
 		return nil, fmt.Errorf("activation WireGuard: %w", err)
 	}
 	return &userspaceTunnel{device: wgDevice, net: tunnelNet}, nil
+}
+
+func resolveWireGuardEndpoint(ctx context.Context, endpoint string, resolver endpointResolver) (string, error) {
+	host, port, err := validateWireGuardEndpoint(endpoint)
+	if err != nil {
+		return "", err
+	}
+	if address, parseErr := netip.ParseAddr(host); parseErr == nil {
+		return net.JoinHostPort(address.String(), port), nil
+	}
+	addresses, err := resolver.LookupNetIP(ctx, "ip", host)
+	if err != nil {
+		return "", fmt.Errorf("résolution DNS du point de terminaison WireGuard %q: %w", host, err)
+	}
+	for _, address := range addresses {
+		address = address.Unmap()
+		if address.IsValid() && !address.IsUnspecified() && !address.IsMulticast() {
+			return net.JoinHostPort(address.String(), port), nil
+		}
+	}
+	return "", fmt.Errorf("résolution DNS du point de terminaison WireGuard %q: aucune adresse IP utilisable", host)
 }
 
 func (tunnel *userspaceTunnel) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
