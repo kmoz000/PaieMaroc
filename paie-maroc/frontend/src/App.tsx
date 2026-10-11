@@ -10,8 +10,10 @@ import {
   DeleteAttendanceHoliday,
   DeletePeriod,
   GenerateCNSSBDS,
+  GeneratePointerWireGuardIdentity,
   GetAttendanceWorkPolicy,
   GetAuthState,
+  GetPointerConnectivity,
   ImportEmployeesCSVToPeriod,
   LinkAttendanceEmployee,
   ListAttendanceDevices,
@@ -33,6 +35,7 @@ import {
   SaveAttendanceWorkPolicy,
   SaveExport,
   SavePeriodEmployee,
+  SavePointerConnectivity,
   SetUserEnabled,
   SyncAttendanceDevice,
   TestAttendanceDevice,
@@ -116,12 +119,50 @@ type Device = {
   name: string;
   model: string;
   protocol: string;
+  transport: "lan" | "wireguard";
+  serialNumber: string;
   host: string;
   port: number;
   enabled: boolean;
   lastStatus: string;
   lastCheckedAt: string;
   linkedUsers: number;
+};
+type PointerConnectivityConfig = {
+  hook: {
+    enabled: boolean;
+    bindAddress: string;
+    port: number;
+    allowedNetworks: string[];
+    firewallConsent: boolean;
+  };
+  wireGuard: {
+    enabled: boolean;
+    address: string;
+    privateKey?: string;
+    peerPublicKey: string;
+    presharedKey?: string;
+    endpoint: string;
+    allowedIPs: string[];
+    persistentKeepaliveSeconds: number;
+    mtu: number;
+  };
+};
+type PointerConnectivityStatus = {
+  collectorActive: boolean;
+  wireGuardActive: boolean;
+  lanAddress: string;
+  tunnelAddress: string;
+  firewallGuidance: string;
+  lastError: string;
+  config: {
+    hook: PointerConnectivityConfig["hook"];
+    wireGuard: Omit<PointerConnectivityConfig["wireGuard"], "privateKey" | "presharedKey"> & {
+      hasPrivateKey: boolean;
+      publicKey: string;
+      hasPresharedKey: boolean;
+    };
+  };
 };
 type Punch = {
   id: number;
@@ -261,6 +302,8 @@ const blankDevice: Device = {
   name: "Entrée principale",
   model: "MB10-VL",
   protocol: "standalone",
+  transport: "lan",
+  serialNumber: "",
   host: "192.168.1.201",
   port: 4370,
   enabled: true,
@@ -1001,7 +1044,11 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
           ) : route === "access" ? (
             <AccessPage current={user} notify={setMessage} />
           ) : route === "devices" ? (
-            <DevicesPage employees={employees} notify={setMessage} />
+            <DevicesPage
+              employees={employees}
+              isAdmin={user.role === "admin"}
+              notify={setMessage}
+            />
           ) : route === "attendance" ? (
             <AttendancePage
               employees={employees}
@@ -2262,9 +2309,11 @@ function formatMinutes(value: number) {
 
 function DevicesPage({
   employees,
+  isAdmin,
   notify,
 }: {
   employees: Employee[];
+  isAdmin: boolean;
   notify: (value: string) => void;
 }) {
   const [devices, setDevices] = useState<Device[]>([]),
@@ -2371,6 +2420,7 @@ function DevicesPage({
           </small>
         </div>
       </div>
+      <PointerConnectivityPanel isAdmin={isAdmin} notify={notify} />
       <div className="device-layout">
         <section className="panel device-list">
           <div className="panel-head">
@@ -2391,7 +2441,7 @@ function DevicesPage({
               <span>
                 <strong>{device.name}</strong>
                 <small>
-                  {device.model} · {device.host}:{device.port}
+                  {device.model} · {device.transport === "wireguard" ? "Tunnel privé" : "Réseau local"} · {device.host}:{device.port}
                 </small>
               </span>
               <em
@@ -2431,6 +2481,20 @@ function DevicesPage({
               <option value="adms">PUSH / ADMS</option>
               <option value="biotime">API ZKBio Time</option>
             </SelectField>
+            <SelectField
+              label="Chemin réseau"
+              value={editing.transport}
+              set={(value) =>
+                setEditing({
+                  ...editing,
+                  transport: value as Device["transport"],
+                })
+              }
+              hint="Le tunnel reste interne à PaieMaroc"
+            >
+              <option value="lan">Réseau local direct</option>
+              <option value="wireguard">WireGuard espace utilisateur</option>
+            </SelectField>
             <TextField
               label="Adresse IP / hôte"
               value={editing.host}
@@ -2441,6 +2505,19 @@ function DevicesPage({
               value={String(editing.port)}
               set={(value) => setEditing({ ...editing, port: Number(value) })}
             />
+            {editing.protocol === "adms" && (
+              <TextField
+                label="N° de série ZKTeco"
+                value={editing.serialNumber}
+                set={(value) =>
+                  setEditing({ ...editing, serialNumber: value })
+                }
+                placeholder="Ex. CLQF24001234"
+                hint="Doit correspondre exactement au paramètre SN envoyé par la pointeuse"
+                pattern="[A-Za-z0-9._-]{1,64}"
+                maxLength={64}
+              />
+            )}
           </div>
           <div className="device-capabilities">
             <span>
@@ -2528,6 +2605,246 @@ function DevicesPage({
         </div>
       </section>
     </>
+  );
+}
+
+function PointerConnectivityPanel({
+  isAdmin,
+  notify,
+}: {
+  isAdmin: boolean;
+  notify: (value: string) => void;
+}) {
+  const emptyConfig: PointerConnectivityConfig = {
+    hook: {
+      enabled: false,
+      bindAddress: "0.0.0.0",
+      port: 8088,
+      allowedNetworks: ["192.168.0.0/16"],
+      firewallConsent: false,
+    },
+    wireGuard: {
+      enabled: false,
+      address: "10.77.0.2/32",
+      privateKey: "",
+      peerPublicKey: "",
+      presharedKey: "",
+      endpoint: "",
+      allowedIPs: ["10.90.0.0/24"],
+      persistentKeepaliveSeconds: 25,
+      mtu: 1420,
+    },
+  };
+  const [status, setStatus] = useState<PointerConnectivityStatus | null>(null),
+    [draft, setDraft] = useState<PointerConnectivityConfig>(emptyConfig),
+    [open, setOpen] = useState(false),
+    [saving, setSaving] = useState(false),
+    [error, setError] = useState(""),
+    [generatedPublicKey, setGeneratedPublicKey] = useState("");
+
+  const applyStatus = (value: PointerConnectivityStatus) => {
+    setStatus(value);
+    setDraft({
+      hook: { ...value.config.hook },
+      wireGuard: {
+        enabled: value.config.wireGuard.enabled,
+        address: value.config.wireGuard.address || "10.77.0.2/32",
+        privateKey: "",
+        peerPublicKey: value.config.wireGuard.peerPublicKey || "",
+        presharedKey: "",
+        endpoint: value.config.wireGuard.endpoint || "",
+        allowedIPs: value.config.wireGuard.allowedIPs?.length
+          ? value.config.wireGuard.allowedIPs
+          : ["10.90.0.0/24"],
+        persistentKeepaliveSeconds:
+          value.config.wireGuard.persistentKeepaliveSeconds || 25,
+        mtu: value.config.wireGuard.mtu || 1420,
+      },
+    });
+  };
+
+  useEffect(() => {
+    if (isNative) {
+      GetPointerConnectivity()
+        .then((value) => applyStatus(value as PointerConnectivityStatus))
+        .catch((reason) => setError(friendlyError(reason)));
+      return;
+    }
+    applyStatus({
+      collectorActive: false,
+      wireGuardActive: false,
+      lanAddress: "",
+      tunnelAddress: "",
+      firewallGuidance:
+        "Le système demandera l’autorisation des connexions entrantes uniquement pour PUSH / ADMS.",
+      lastError: "",
+      config: {
+        hook: emptyConfig.hook,
+        wireGuard: {
+          ...emptyConfig.wireGuard,
+          hasPrivateKey: false,
+          publicKey: "",
+          hasPresharedKey: false,
+        },
+      },
+    });
+  }, []);
+
+  const networkList = (value: string) =>
+    value
+      .split(/[;,\n]+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+  async function generateIdentity() {
+    try {
+      const identity = isNative
+        ? await GeneratePointerWireGuardIdentity()
+        : { privateKey: "clé-privée-générée", publicKey: "clé-publique-générée" };
+      setDraft((current) => ({
+        ...current,
+        wireGuard: { ...current.wireGuard, privateKey: identity.privateKey },
+      }));
+      setGeneratedPublicKey(identity.publicKey);
+      notify("Nouvelle identité WireGuard créée. La clé privée restera masquée.");
+    } catch (reason) {
+      setError(friendlyError(reason));
+    }
+  }
+
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      const next = isNative
+        ? await SavePointerConnectivity(draft as never)
+        : ({
+            ...status,
+            collectorActive: draft.hook.enabled,
+            wireGuardActive: draft.wireGuard.enabled,
+            lanAddress: draft.hook.enabled
+              ? `${draft.hook.bindAddress}:${draft.hook.port}`
+              : "",
+            tunnelAddress:
+              draft.hook.enabled && draft.wireGuard.enabled
+                ? `${draft.wireGuard.address.split("/")[0]}:${draft.hook.port}`
+                : "",
+            lastError: "",
+            config: {
+              hook: draft.hook,
+              wireGuard: {
+                ...draft.wireGuard,
+                hasPrivateKey: Boolean(draft.wireGuard.privateKey),
+                publicKey: generatedPublicKey,
+                hasPresharedKey: Boolean(draft.wireGuard.presharedKey),
+              },
+            },
+          } as PointerConnectivityStatus);
+      applyStatus(next as PointerConnectivityStatus);
+      setGeneratedPublicKey("");
+      notify("Connectivité des pointeuses enregistrée et services rechargés.");
+      setOpen(false);
+    } catch (reason) {
+      setError(friendlyError(reason));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const localPublicKey = generatedPublicKey || status?.config.wireGuard.publicKey;
+  return (
+    <section className="panel pointer-connectivity" data-testid="pointer-connectivity">
+      <header className="pointer-connectivity-head">
+        <div className="pointer-service-mark"><Icon name="shield" size={20} /></div>
+        <div>
+          <span className="eyebrow">PASSERELLE POINTEUSES</span>
+          <h2>Connexions locales et sites distants</h2>
+          <p>Services réservés aux terminaux configurés. Aucune route système ni interface noyau n’est créée.</p>
+        </div>
+        <div className="pointer-service-state">
+          <span className={status?.collectorActive ? "active" : "idle"}>
+            Collecteur {status?.collectorActive ? "actif" : "arrêté"}
+          </span>
+          <span className={status?.wireGuardActive ? "active" : "idle"}>
+            Tunnel {status?.wireGuardActive ? "actif" : "arrêté"}
+          </span>
+        </div>
+        <button className="button secondary" onClick={() => setOpen((value) => !value)} disabled={!isAdmin}>
+          <Icon name="key" /> {open ? "Fermer" : "Configurer"}
+        </button>
+      </header>
+
+      <div className="pointer-paths">
+        <article>
+          <b>01</b><Icon name="device" />
+          <span><strong>Standalone</strong><small>PaieMaroc appelle la pointeuse. Aucun port entrant à ouvrir.</small></span>
+        </article>
+        <article>
+          <b>02</b><Icon name="send" />
+          <span><strong>PUSH / ADMS</strong><small>La pointeuse envoie son journal au collecteur TCP autorisé.</small></span>
+        </article>
+        <article>
+          <b>03</b><Icon name="lock" />
+          <span><strong>Site derrière NAT</strong><small>WireGuard fonctionne dans PaieMaroc, uniquement vers les plages définies.</small></span>
+        </article>
+      </div>
+
+      {status?.lastError && <div className="pointer-error" role="alert"><Icon name="warning" /><span><strong>Service non démarré</strong><small>{status.lastError}</small></span></div>}
+      {error && <div className="pointer-error" role="alert"><Icon name="warning" /><span><strong>Configuration à corriger</strong><small>{error}</small></span></div>}
+
+      {open && (
+        <form className="pointer-setup" onSubmit={save}>
+          <fieldset>
+            <legend><span>01</span><div><strong>Collecteur PUSH / ADMS</strong><small>À activer seulement si une pointeuse initie la connexion.</small></div></legend>
+            <label className="pointer-check">
+              <input type="checkbox" checked={draft.hook.enabled} onChange={(event) => setDraft({ ...draft, hook: { ...draft.hook, enabled: event.target.checked } })} />
+              <span><strong>Recevoir les journaux des pointeuses</strong><small>Écoute locale limitée aux réseaux autorisés ci-dessous.</small></span>
+            </label>
+            {draft.hook.enabled && <div className="pointer-grid">
+              <TextField label="Adresse d’écoute" value={draft.hook.bindAddress} set={(bindAddress) => setDraft({ ...draft, hook: { ...draft.hook, bindAddress } })} hint="0.0.0.0 écoute les interfaces locales" />
+              <TextField label="Port ADMS" type="number" value={String(draft.hook.port)} set={(port) => setDraft({ ...draft, hook: { ...draft.hook, port: Number(port) } })} min={1} max={65535} />
+              <TextField label="Réseaux de pointeuses autorisés" value={draft.hook.allowedNetworks.join(", ")} set={(value) => setDraft({ ...draft, hook: { ...draft.hook, allowedNetworks: networkList(value) } })} hint="CIDR séparés par des virgules" placeholder="192.168.10.0/24" />
+              <div className="firewall-copy"><Icon name="shield" /><span><strong>Autorisation du pare-feu</strong><small>{status?.firewallGuidance}</small></span></div>
+              <label className="pointer-check consent">
+                <input type="checkbox" checked={draft.hook.firewallConsent} onChange={(event) => setDraft({ ...draft, hook: { ...draft.hook, firewallConsent: event.target.checked } })} required />
+                <span><strong>J’autorise cette écoute entrante</strong><small>Je limiterai l’accès au réseau privé des pointeuses.</small></span>
+              </label>
+            </div>}
+          </fieldset>
+
+          <fieldset>
+            <legend><span>02</span><div><strong>WireGuard en espace utilisateur</strong><small>Pour joindre une passerelle distante derrière NAT, sans pilote noyau.</small></div></legend>
+            <label className="pointer-check">
+              <input type="checkbox" checked={draft.wireGuard.enabled} onChange={(event) => setDraft({ ...draft, wireGuard: { ...draft.wireGuard, enabled: event.target.checked } })} />
+              <span><strong>Activer le tunnel privé des pointeuses</strong><small>Seules les fiches marquées « WireGuard » l’utiliseront.</small></span>
+            </label>
+            {draft.wireGuard.enabled && <>
+              <div className="pointer-grid wireguard-grid">
+                <TextField label="Adresse privée PaieMaroc" value={draft.wireGuard.address} set={(address) => setDraft({ ...draft, wireGuard: { ...draft.wireGuard, address } })} placeholder="10.77.0.2/32" />
+                <TextField label="Passerelle WireGuard" value={draft.wireGuard.endpoint} set={(endpoint) => setDraft({ ...draft, wireGuard: { ...draft.wireGuard, endpoint } })} placeholder="vpn.societe.ma:51820" />
+                <TextField label="Clé publique de la passerelle" value={draft.wireGuard.peerPublicKey} set={(peerPublicKey) => setDraft({ ...draft, wireGuard: { ...draft.wireGuard, peerPublicKey } })} />
+                <TextField label="Sous-réseaux distants des pointeuses" value={draft.wireGuard.allowedIPs.join(", ")} set={(value) => setDraft({ ...draft, wireGuard: { ...draft.wireGuard, allowedIPs: networkList(value) } })} hint="Les routes par défaut sont refusées" placeholder="10.90.0.0/24" />
+                <TextField label="Nouvelle clé privée" type="password" value={draft.wireGuard.privateKey || ""} set={(privateKey) => setDraft({ ...draft, wireGuard: { ...draft.wireGuard, privateKey } })} required={!status?.config.wireGuard.hasPrivateKey} autoComplete="new-password" hint={status?.config.wireGuard.hasPrivateKey ? "Laisser vide pour conserver la clé protégée" : "Générez une identité ci-dessous"} />
+                <TextField label="Clé prépartagée (optionnelle)" type="password" value={draft.wireGuard.presharedKey || ""} set={(presharedKey) => setDraft({ ...draft, wireGuard: { ...draft.wireGuard, presharedKey } })} required={false} autoComplete="new-password" />
+              </div>
+              <div className="wireguard-identity">
+                <div><small>CLÉ PUBLIQUE LOCALE À COPIER SUR LA PASSERELLE</small><strong>{localPublicKey || "Générez d’abord l’identité PaieMaroc"}</strong></div>
+                <button type="button" className="button secondary" onClick={generateIdentity}>Générer l’identité</button>
+              </div>
+              <div className="pointer-grid compact-network-grid">
+                <TextField label="Maintien NAT (secondes)" type="number" value={String(draft.wireGuard.persistentKeepaliveSeconds)} set={(value) => setDraft({ ...draft, wireGuard: { ...draft.wireGuard, persistentKeepaliveSeconds: Number(value) } })} min={0} max={3600} hint="25 s recommandé derrière NAT" />
+                <TextField label="MTU" type="number" value={String(draft.wireGuard.mtu)} set={(value) => setDraft({ ...draft, wireGuard: { ...draft.wireGuard, mtu: Number(value) } })} min={1280} max={9000} />
+              </div>
+            </>}
+          </fieldset>
+          <div className="pointer-setup-actions">
+            <span><Icon name="lock" /><small>La clé privée n’est jamais renvoyée à l’interface après enregistrement.</small></span>
+            <button className="button primary" disabled={saving}>{saving ? "Démarrage…" : "Enregistrer et appliquer"}<Icon name="arrow" /></button>
+          </div>
+        </form>
+      )}
+    </section>
   );
 }
 

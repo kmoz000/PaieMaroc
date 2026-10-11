@@ -6,6 +6,7 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"github.com/kmoz000/PaieMaroc/paie-maroc/internal/cnss"
 	"github.com/kmoz000/PaieMaroc/paie-maroc/internal/exporter"
 	"github.com/kmoz000/PaieMaroc/paie-maroc/internal/payroll"
+	"github.com/kmoz000/PaieMaroc/paie-maroc/internal/pointerservice"
 	"github.com/kmoz000/PaieMaroc/paie-maroc/internal/store"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -31,6 +33,9 @@ type App struct {
 	attendanceSyncMu     sync.Mutex
 	attendanceSyncCancel context.CancelFunc
 	attendanceSyncWG     sync.WaitGroup
+	pointerManager       *pointerservice.Manager
+	pointerConfigPath    string
+	pointerStartupErr    error
 }
 
 type AuthState struct {
@@ -110,6 +115,14 @@ func (app *App) startup(ctx context.Context) {
 	}
 	app.store, app.startupErr = store.Open(filepath.Join(appDir, "paie-maroc.db"))
 	if app.startupErr == nil {
+		app.pointerConfigPath = filepath.Join(appDir, "pointer-connectivity.json")
+		app.pointerManager = pointerservice.NewManager(app.beginADMSImport)
+		pointerConfig, configErr := pointerservice.LoadConfig(app.pointerConfigPath)
+		if configErr != nil {
+			app.pointerStartupErr = configErr
+		} else if applyErr := app.pointerManager.Apply(pointerConfig); applyErr != nil {
+			app.pointerStartupErr = applyErr
+		}
 		app.startAttendanceAutoSync(ctx)
 	}
 }
@@ -118,6 +131,9 @@ func (app *App) shutdown(context.Context) {
 	if app.attendanceSyncCancel != nil {
 		app.attendanceSyncCancel()
 		app.attendanceSyncWG.Wait()
+	}
+	if app.pointerManager != nil {
+		app.pointerManager.Close()
 	}
 	if app.store != nil {
 		_ = app.store.Close()
@@ -575,6 +591,48 @@ func (app *App) AttendanceProfiles() []attendance.Profile {
 	return []attendance.Profile{attendance.MB10VLProfile()}
 }
 
+func (app *App) GetPointerConnectivity() (pointerservice.Status, error) {
+	if _, err := app.requireAuthenticated(); err != nil {
+		return pointerservice.Status{}, err
+	}
+	if app.pointerManager == nil {
+		return pointerservice.Status{}, errors.New("service réseau des pointeuses indisponible")
+	}
+	status := app.pointerManager.Status()
+	if app.pointerStartupErr != nil && status.LastError == "" {
+		status.LastError = app.pointerStartupErr.Error()
+	}
+	return status, nil
+}
+
+func (app *App) GeneratePointerWireGuardIdentity() (pointerservice.Identity, error) {
+	if _, err := app.requireAdmin(); err != nil {
+		return pointerservice.Identity{}, err
+	}
+	return pointerservice.GenerateIdentity()
+}
+
+func (app *App) SavePointerConnectivity(config pointerservice.Config) (pointerservice.Status, error) {
+	if _, err := app.requireAdmin(); err != nil {
+		return pointerservice.Status{}, err
+	}
+	if app.pointerManager == nil {
+		return pointerservice.Status{}, errors.New("service réseau des pointeuses indisponible")
+	}
+	previous := app.pointerManager.CurrentConfig()
+	config = pointerservice.MergeSecrets(config, previous)
+	if err := app.pointerManager.Apply(config); err != nil {
+		_ = app.pointerManager.Apply(previous)
+		return pointerservice.Status{}, err
+	}
+	if err := pointerservice.SaveConfig(app.pointerConfigPath, config); err != nil {
+		_ = app.pointerManager.Apply(previous)
+		return pointerservice.Status{}, err
+	}
+	app.pointerStartupErr = nil
+	return app.pointerManager.Status(), nil
+}
+
 func (app *App) ListAttendanceDevices() ([]attendance.Device, error) {
 	if _, err := app.requireAuthenticated(); err != nil {
 		return nil, err
@@ -586,14 +644,30 @@ func (app *App) SaveAttendanceDevice(device attendance.Device) (attendance.Devic
 	if _, err := app.requireAdmin(); err != nil {
 		return attendance.Device{}, err
 	}
-	return app.store.SaveAttendanceDevice(app.ctx, device)
+	validated, err := attendance.ValidateDevice(device)
+	if err != nil {
+		return attendance.Device{}, err
+	}
+	if validated.Transport == attendance.TransportWireGuard {
+		if app.pointerManager == nil || !app.pointerManager.Status().Config.WireGuard.Enabled {
+			return attendance.Device{}, errors.New("configurez et activez d’abord WireGuard dans la passerelle Pointeuses")
+		}
+		if !app.pointerManager.AllowsAddress(validated.Host) {
+			return attendance.Device{}, errors.New("l’adresse IP de la pointeuse est hors des sous-réseaux WireGuard autorisés")
+		}
+	}
+	return app.store.SaveAttendanceDevice(app.ctx, validated)
 }
 
 func (app *App) TestAttendanceDevice(device attendance.Device) (attendance.ProbeResult, error) {
 	if _, err := app.requireAdmin(); err != nil {
 		return attendance.ProbeResult{}, err
 	}
-	result, err := attendance.Probe(app.ctx, device)
+	dialer, err := app.attendanceDialer(device)
+	if err != nil {
+		return attendance.ProbeResult{}, err
+	}
+	result, err := attendance.ProbeWithDialer(app.ctx, device, dialer)
 	if err != nil {
 		return attendance.ProbeResult{}, err
 	}
@@ -752,7 +826,11 @@ func (app *App) syncAttendanceDevice(ctx context.Context, deviceID int64) (atten
 		return attendance.SyncResult{}, err
 	}
 	result := attendance.SyncResult{DeviceID: deviceID}
-	readStats, err := attendance.StreamStandalone(ctx, device, since.Add(-time.Minute), func(batch []attendance.RawPunch) error {
+	dialer, err := app.attendanceDialer(device)
+	if err != nil {
+		return result, err
+	}
+	readStats, err := attendance.StreamStandaloneWithDialer(ctx, device, since.Add(-time.Minute), dialer, func(batch []attendance.RawPunch) error {
 		batchResult, importErr := importSession.ImportBatch(ctx, batch)
 		result.Imported += batchResult.Imported
 		result.Ignored += batchResult.Ignored
@@ -772,6 +850,53 @@ func (app *App) syncAttendanceDevice(ctx context.Context, deviceID int64) (atten
 	result.Message = fmt.Sprintf("%d nouveau(x), %d déjà présent(s), %d non lié(s), %d rejeté(s)",
 		result.Imported, result.Ignored, result.Unlinked, result.Skipped)
 	return result, nil
+}
+
+func (app *App) attendanceDialer(device attendance.Device) (attendance.ContextDialer, error) {
+	if device.Transport != attendance.TransportWireGuard {
+		return &net.Dialer{Timeout: 8 * time.Second}, nil
+	}
+	if app.pointerManager == nil {
+		return nil, errors.New("service WireGuard des pointeuses indisponible")
+	}
+	return app.pointerManager, nil
+}
+
+type admsImportSession struct {
+	store    *store.Store
+	deviceID int64
+	session  *store.AttendanceImportSession
+}
+
+func (session *admsImportSession) ImportBatch(ctx context.Context, batch []attendance.RawPunch) error {
+	_, err := session.session.ImportBatch(ctx, batch)
+	if err != nil {
+		session.store.RecordAttendanceSyncError(ctx, session.deviceID, err)
+	}
+	return err
+}
+
+func (session *admsImportSession) Complete(ctx context.Context, latest time.Time) error {
+	if err := session.store.CompleteAttendanceSync(ctx, session.deviceID, latest); err != nil {
+		session.store.RecordAttendanceSyncError(ctx, session.deviceID, err)
+		return err
+	}
+	return nil
+}
+
+func (app *App) beginADMSImport(ctx context.Context, serial string) (pointerservice.PunchSession, error) {
+	device, err := app.store.AttendanceDeviceBySerial(ctx, serial)
+	if err != nil {
+		return nil, err
+	}
+	if !device.Enabled || device.Protocol != attendance.ProtocolADMS {
+		return nil, errors.New("pointeuse PUSH / ADMS inconnue ou désactivée")
+	}
+	session, err := app.store.BeginAttendanceImport(ctx, device.ID)
+	if err != nil {
+		return nil, err
+	}
+	return &admsImportSession{store: app.store, deviceID: device.ID, session: session}, nil
 }
 
 func (app *App) startAttendanceAutoSync(parent context.Context) {

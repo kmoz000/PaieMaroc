@@ -5,6 +5,8 @@ export namespace attendance {
 	    name: string;
 	    model: string;
 	    protocol: string;
+	    transport: string;
+	    serialNumber: string;
 	    host: string;
 	    port: number;
 	    enabled: boolean;
@@ -22,6 +24,8 @@ export namespace attendance {
 	        this.name = source["name"];
 	        this.model = source["model"];
 	        this.protocol = source["protocol"];
+	        this.transport = source["transport"];
+	        this.serialNumber = source["serialNumber"];
 	        this.host = source["host"];
 	        this.port = source["port"];
 	        this.enabled = source["enabled"];
@@ -767,6 +771,211 @@ export namespace payroll {
 	        this.field = source["field"];
 	        this.message = source["message"];
 	    }
+	}
+
+}
+
+export namespace pointerservice {
+
+	export class WireGuardConfig {
+	    enabled: boolean;
+	    address: string;
+	    privateKey?: string;
+	    peerPublicKey: string;
+	    presharedKey?: string;
+	    endpoint: string;
+	    allowedIPs: string[];
+	    persistentKeepaliveSeconds: number;
+	    mtu: number;
+
+	    static createFrom(source: any = {}) {
+	        return new WireGuardConfig(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.address = source["address"];
+	        this.privateKey = source["privateKey"];
+	        this.peerPublicKey = source["peerPublicKey"];
+	        this.presharedKey = source["presharedKey"];
+	        this.endpoint = source["endpoint"];
+	        this.allowedIPs = source["allowedIPs"];
+	        this.persistentKeepaliveSeconds = source["persistentKeepaliveSeconds"];
+	        this.mtu = source["mtu"];
+	    }
+	}
+	export class HookConfig {
+	    enabled: boolean;
+	    bindAddress: string;
+	    port: number;
+	    allowedNetworks: string[];
+	    firewallConsent: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new HookConfig(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.bindAddress = source["bindAddress"];
+	        this.port = source["port"];
+	        this.allowedNetworks = source["allowedNetworks"];
+	        this.firewallConsent = source["firewallConsent"];
+	    }
+	}
+	export class Config {
+	    hook: HookConfig;
+	    wireGuard: WireGuardConfig;
+
+	    static createFrom(source: any = {}) {
+	        return new Config(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hook = this.convertValues(source["hook"], HookConfig);
+	        this.wireGuard = this.convertValues(source["wireGuard"], WireGuardConfig);
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+	export class Identity {
+	    privateKey: string;
+	    publicKey: string;
+
+	    static createFrom(source: any = {}) {
+	        return new Identity(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.privateKey = source["privateKey"];
+	        this.publicKey = source["publicKey"];
+	    }
+	}
+	export class PublicWireGuardConfig {
+	    enabled: boolean;
+	    address: string;
+	    peerPublicKey: string;
+	    endpoint: string;
+	    allowedIPs: string[];
+	    persistentKeepaliveSeconds: number;
+	    mtu: number;
+	    hasPrivateKey: boolean;
+	    publicKey: string;
+	    hasPresharedKey: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new PublicWireGuardConfig(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.address = source["address"];
+	        this.peerPublicKey = source["peerPublicKey"];
+	        this.endpoint = source["endpoint"];
+	        this.allowedIPs = source["allowedIPs"];
+	        this.persistentKeepaliveSeconds = source["persistentKeepaliveSeconds"];
+	        this.mtu = source["mtu"];
+	        this.hasPrivateKey = source["hasPrivateKey"];
+	        this.publicKey = source["publicKey"];
+	        this.hasPresharedKey = source["hasPresharedKey"];
+	    }
+	}
+	export class PublicConfig {
+	    hook: HookConfig;
+	    wireGuard: PublicWireGuardConfig;
+
+	    static createFrom(source: any = {}) {
+	        return new PublicConfig(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hook = this.convertValues(source["hook"], HookConfig);
+	        this.wireGuard = this.convertValues(source["wireGuard"], PublicWireGuardConfig);
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+	export class Status {
+	    collectorActive: boolean;
+	    wireGuardActive: boolean;
+	    lanAddress: string;
+	    tunnelAddress: string;
+	    firewallGuidance: string;
+	    lastError: string;
+	    config: PublicConfig;
+
+	    static createFrom(source: any = {}) {
+	        return new Status(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.collectorActive = source["collectorActive"];
+	        this.wireGuardActive = source["wireGuardActive"];
+	        this.lanAddress = source["lanAddress"];
+	        this.tunnelAddress = source["tunnelAddress"];
+	        this.firewallGuidance = source["firewallGuidance"];
+	        this.lastError = source["lastError"];
+	        this.config = this.convertValues(source["config"], PublicConfig);
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }

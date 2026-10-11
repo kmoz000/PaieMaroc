@@ -1,6 +1,6 @@
 # Sources réglementaires et techniques
 
-Sources vérifiées le 10 octobre 2026 :
+Sources vérifiées le 11 octobre 2026 :
 
 - [Code général des impôts 2026 — DGI](https://www.finances.gov.ma/Publication/dgi/2025/CGI-2026-FR.pdf) : articles 59 et 73, frais professionnels et barème annuel de l’IR.
 - [Décret n° 2-01-2723 — ACAPS](https://www.acaps.ma/sites/default/files/publication_documents/decret_ndeg_2-01-2723.pdf) : allocations familiales, prestations sociales et plafond CNSS de 6 000 MAD.
@@ -14,6 +14,10 @@ Sources vérifiées le 10 octobre 2026 :
 - [Centre SDK — ZKTeco](https://www.zkteco.com/en/SDK) : SDK officiels par famille de matériel; il n’existe pas un pilote public unique couvrant tous les firmwares.
 - [go-zkteco — Fariz Fadian](https://github.com/farizfadian/go-zkteco) : base MIT de l’adaptateur TCP Standalone en lecture seule, intégrée et durcie dans `internal/attendance/device.go`; attribution complète dans `THIRD_PARTY_NOTICES.md`.
 - [ZK protocol — community reference](https://github.com/adrobinoga/zk-protocol/blob/master/protocol.md) : cadrage TCP, commandes et encodage temporel recoupés pour les tests du décodeur.
+- [WireGuard Quick Start — WireGuard](https://www.wireguard.com/quickstart/) : modèle de pairs, `AllowedIPs` et maintien NAT; 25 secondes est la valeur conseillée lorsque le pair se trouve derrière un NAT ou pare-feu.
+- [wireguard-go netstack — WireGuard](https://git.zx2c4.com/wireguard-go/tree/tun/netstack/tun.go) : pile TCP/IP en espace utilisateur employée par PaieMaroc sans interface noyau.
+- [Application Firewall et signature — Apple](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/AboutCS/AboutCS.html) : macOS utilise la signature de l’application pour décider des connexions entrantes et peut demander l’accord de l’utilisateur.
+- [Windows Firewall — Microsoft](https://learn.microsoft.com/en-us/windows/security/operating-system-security/network-security/windows-firewall/configure-with-command-line) : conserver le pare-feu actif et limiter toute règle entrante au programme, au port et au réseau privé nécessaires.
 
 Les taux sociaux combinés utilisés sont versionnés dans `internal/payroll/payroll.go`. Le format exact d’une remise dépend du contrat de télétransmission de la banque : l’application exige donc une validation bancaire avant le premier envoi réel. Une validation réussie dans PaieMaroc ne remplace ni l’accusé de contrôle CNSS ni l’acceptation bancaire.
 

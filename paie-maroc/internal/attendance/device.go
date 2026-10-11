@@ -19,9 +19,12 @@ const (
 	ProtocolStandalone = "standalone"
 	ProtocolADMS       = "adms"
 	ProtocolBioTime    = "biotime"
+	TransportLAN       = "lan"
+	TransportWireGuard = "wireguard"
 )
 
 var hostnamePattern = regexp.MustCompile(`^[a-zA-Z0-9](?:[a-zA-Z0-9.-]{0,251}[a-zA-Z0-9])?$`)
+var serialNumberPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
 
 const (
 	standaloneTimeout   = 8 * time.Second
@@ -54,12 +57,18 @@ type Device struct {
 	Name          string `json:"name"`
 	Model         string `json:"model"`
 	Protocol      string `json:"protocol"`
+	Transport     string `json:"transport"`
+	SerialNumber  string `json:"serialNumber"`
 	Host          string `json:"host"`
 	Port          int    `json:"port"`
 	Enabled       bool   `json:"enabled"`
 	LastStatus    string `json:"lastStatus"`
 	LastCheckedAt string `json:"lastCheckedAt"`
 	LinkedUsers   int64  `json:"linkedUsers"`
+}
+
+type ContextDialer interface {
+	DialContext(context.Context, string, string) (net.Conn, error)
 }
 
 type Profile struct {
@@ -103,6 +112,10 @@ func ValidateDevice(device Device) (Device, error) {
 	device.Name = strings.TrimSpace(device.Name)
 	device.Model = strings.TrimSpace(device.Model)
 	device.Host = strings.TrimSpace(device.Host)
+	device.SerialNumber = strings.TrimSpace(device.SerialNumber)
+	if device.Transport == "" {
+		device.Transport = TransportLAN
+	}
 	if len(device.Name) < 2 || len(device.Name) > 80 {
 		return Device{}, errors.New("le nom de la pointeuse doit contenir entre 2 et 80 caractères")
 	}
@@ -112,8 +125,20 @@ func ValidateDevice(device Device) (Device, error) {
 	if device.Protocol != ProtocolStandalone && device.Protocol != ProtocolADMS && device.Protocol != ProtocolBioTime {
 		return Device{}, errors.New("protocole ZKTeco non pris en charge")
 	}
+	if device.Transport != TransportLAN && device.Transport != TransportWireGuard {
+		return Device{}, errors.New("transport de pointeuse non pris en charge")
+	}
+	if device.SerialNumber != "" && !serialNumberPattern.MatchString(device.SerialNumber) {
+		return Device{}, errors.New("le numéro de série doit contenir 1 à 64 lettres, chiffres, points, tirets ou tirets bas")
+	}
+	if device.Protocol == ProtocolADMS && device.SerialNumber == "" {
+		return Device{}, errors.New("le numéro de série ZKTeco est obligatoire en mode PUSH / ADMS")
+	}
 	if net.ParseIP(device.Host) == nil && !hostnamePattern.MatchString(device.Host) {
 		return Device{}, errors.New("adresse IP ou nom d’hôte invalide")
+	}
+	if device.Transport == TransportWireGuard && net.ParseIP(device.Host) == nil {
+		return Device{}, errors.New("une pointeuse WireGuard doit utiliser une adresse IP privée, pas un nom d’hôte")
 	}
 	if device.Port < 1 || device.Port > 65535 {
 		return Device{}, errors.New("port réseau invalide")
@@ -124,22 +149,37 @@ func ValidateDevice(device Device) (Device, error) {
 // Probe verifies network reachability only. Protocol authentication and event
 // synchronization are performed by the selected vendor adapter.
 func Probe(ctx context.Context, device Device) (ProbeResult, error) {
+	return ProbeWithDialer(ctx, device, &net.Dialer{Timeout: 3 * time.Second})
+}
+
+func ProbeWithDialer(ctx context.Context, device Device, dialer ContextDialer) (ProbeResult, error) {
 	validated, err := ValidateDevice(device)
 	if err != nil {
 		return ProbeResult{}, err
 	}
+	if dialer == nil {
+		return ProbeResult{}, errors.New("transport réseau de la pointeuse absent")
+	}
 	startedAt := time.Now()
-	connection, err := (&net.Dialer{Timeout: 3 * time.Second}).DialContext(
+	connection, err := dialer.DialContext(
 		ctx,
 		"tcp",
 		net.JoinHostPort(validated.Host, fmt.Sprintf("%d", validated.Port)),
 	)
 	latency := time.Since(startedAt).Milliseconds()
 	if err != nil {
-		return ProbeResult{LatencyMS: latency, Message: "Pointeuse injoignable; vérifiez IP, port et pare-feu."}, nil
+		message := "Pointeuse injoignable; vérifiez IP, port et pare-feu."
+		if validated.Transport == TransportWireGuard {
+			message = "Pointeuse injoignable via WireGuard; vérifiez le pair, AllowedIPs, IP et port."
+		}
+		return ProbeResult{LatencyMS: latency, Message: message}, nil
 	}
 	_ = connection.Close()
-	return ProbeResult{Reachable: true, LatencyMS: latency, Message: "Pointeuse joignable sur le réseau local."}, nil
+	message := "Pointeuse joignable sur le réseau local."
+	if validated.Transport == TransportWireGuard {
+		message = "Pointeuse joignable via WireGuard en espace utilisateur."
+	}
+	return ProbeResult{Reachable: true, LatencyMS: latency, Message: message}, nil
 }
 
 // StreamStandalone reads ZKTeco attendance records directly from a standalone
@@ -150,8 +190,15 @@ func Probe(ctx context.Context, device Device) (ProbeResult, error) {
 // github.com/farizfadian/go-zkteco project. PaieMaroc intentionally includes
 // only read-only attendance operations; see THIRD_PARTY_NOTICES.md.
 func StreamStandalone(ctx context.Context, device Device, since time.Time, yield func([]RawPunch) error) (StandaloneReadStats, error) {
+	return StreamStandaloneWithDialer(ctx, device, since, &net.Dialer{Timeout: standaloneTimeout}, yield)
+}
+
+func StreamStandaloneWithDialer(ctx context.Context, device Device, since time.Time, dialer ContextDialer, yield func([]RawPunch) error) (StandaloneReadStats, error) {
 	if yield == nil {
 		return StandaloneReadStats{}, errors.New("traitement des pointages absent")
+	}
+	if dialer == nil {
+		return StandaloneReadStats{}, errors.New("transport réseau de la pointeuse absent")
 	}
 	validated, err := ValidateDevice(device)
 	if err != nil {
@@ -160,7 +207,7 @@ func StreamStandalone(ctx context.Context, device Device, since time.Time, yield
 	if validated.Protocol != ProtocolStandalone {
 		return StandaloneReadStats{}, errors.New("la lecture directe exige le protocole Standalone TCP/IP")
 	}
-	client, err := dialZKDevice(ctx, validated)
+	client, err := dialZKDevice(ctx, validated, dialer)
 	if err != nil {
 		return StandaloneReadStats{}, fmt.Errorf("connexion ZKTeco: %w", err)
 	}
@@ -203,8 +250,8 @@ type zkDeviceClient struct {
 	stopWatch chan struct{}
 }
 
-func dialZKDevice(ctx context.Context, device Device) (*zkDeviceClient, error) {
-	connection, err := (&net.Dialer{Timeout: standaloneTimeout}).DialContext(
+func dialZKDevice(ctx context.Context, device Device, dialer ContextDialer) (*zkDeviceClient, error) {
+	connection, err := dialer.DialContext(
 		ctx,
 		"tcp",
 		net.JoinHostPort(device.Host, strconv.Itoa(device.Port)),

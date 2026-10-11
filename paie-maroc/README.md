@@ -1,6 +1,6 @@
 # Application PaieMaroc
 
-Application Wails 2 (Go, React et TypeScript). Le domaine est isolé dans `internal/payroll`, `internal/cnss`, `internal/exporter`, `internal/auth`, `internal/attendance` et `internal/store`; `app.go` expose uniquement la frontière bureau.
+Application Wails 2 (Go, React et TypeScript). Le domaine est isolé dans `internal/payroll`, `internal/cnss`, `internal/exporter`, `internal/auth`, `internal/attendance`, `internal/pointerservice` et `internal/store`; `app.go` expose uniquement la frontière bureau.
 
 ## Commandes
 
@@ -18,3 +18,5 @@ La génération e-BDS demande uniquement le fichier préétabli CNSS du mois. Pa
 Au premier lancement, l’application exige la création d’un administrateur local. Les salariés sont uniques, tandis que les jours, salaires et avances sont enregistrés par mois. Une nouvelle période peut reprendre la précédente; une clôture peut être rouverte ou supprimée par un administrateur.
 
 Le module de présence configure plusieurs pointeuses ZKTeco selon leur famille (`standalone`, `adms` ou `biotime`). Le MB10-VL est le profil prioritaire. PaieMaroc conserve les identifiants de liaison et les événements utiles, jamais les gabarits de visage ou d’empreinte.
+
+La passerelle Pointeuses distingue trois chemins : lecture Standalone sortante sur le LAN, collecteur PUSH/ADMS entrant après consentement pare-feu, et accès distant par WireGuard en espace utilisateur. WireGuard ne crée ni interface noyau ni route système; seules les pointeuses explicitement marquées « Tunnel privé » utilisent les sous-réseaux autorisés. Voir [`docs/POINTER_CONNECTIVITY.md`](docs/POINTER_CONNECTIVITY.md).

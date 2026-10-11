@@ -139,3 +139,43 @@ describe("attendance journal", () => {
     expect(screen.getByText("Garde-fou de calcul")).toBeVisible();
   });
 });
+
+describe("pointer connectivity", () => {
+  it("separates local polling, ADMS firewall consent and userspace WireGuard", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(
+      await screen.findByRole(
+        "button",
+        { name: /Pointeuses ZKTeco/ },
+        { timeout: 2000 },
+      ),
+    );
+
+    expect(screen.getByTestId("pointer-connectivity")).toBeVisible();
+    expect(screen.getByText(/Aucun port entrant à ouvrir/)).toBeVisible();
+    expect(screen.getByText(/Aucune route système ni interface noyau/)).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: /Configurer/ }));
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: /Recevoir les journaux des pointeuses/,
+      }),
+    );
+    expect(screen.getByText("Autorisation du pare-feu")).toBeVisible();
+    expect(
+      screen.getByRole("checkbox", {
+        name: /J’autorise cette écoute entrante/,
+      }),
+    ).toBeRequired();
+
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: /Activer le tunnel privé des pointeuses/,
+      }),
+    );
+    expect(screen.getByLabelText(/Passerelle WireGuard/)).toBeVisible();
+    expect(screen.getByText(/Les routes par défaut sont refusées/)).toBeVisible();
+  });
+});

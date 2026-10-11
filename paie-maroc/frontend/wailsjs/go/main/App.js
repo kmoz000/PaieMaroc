@@ -42,12 +42,20 @@ export function GenerateCNSSBDS(arg1) {
   return window['go']['main']['App']['GenerateCNSSBDS'](arg1);
 }
 
+export function GeneratePointerWireGuardIdentity() {
+  return window['go']['main']['App']['GeneratePointerWireGuardIdentity']();
+}
+
 export function GetAttendanceWorkPolicy() {
   return window['go']['main']['App']['GetAttendanceWorkPolicy']();
 }
 
 export function GetAuthState() {
   return window['go']['main']['App']['GetAuthState']();
+}
+
+export function GetPointerConnectivity() {
+  return window['go']['main']['App']['GetPointerConnectivity']();
 }
 
 export function ImportEmployeesCSV() {
@@ -148,6 +156,10 @@ export function SaveExport(arg1) {
 
 export function SavePeriodEmployee(arg1, arg2) {
   return window['go']['main']['App']['SavePeriodEmployee'](arg1, arg2);
+}
+
+export function SavePointerConnectivity(arg1) {
+  return window['go']['main']['App']['SavePointerConnectivity'](arg1);
 }
 
 export function SetUserEnabled(arg1, arg2) {

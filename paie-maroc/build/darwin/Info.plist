@@ -23,6 +23,13 @@
         <string>true</string>
         <key>NSHumanReadableCopyright</key>
         <string>{{.Info.Copyright}}</string>
+        <key>NSLocalNetworkUsageDescription</key>
+        <string>PaieMaroc accède uniquement aux pointeuses configurées sur votre réseau local afin de recevoir et synchroniser les journaux de présence.</string>
+        <key>NSAppTransportSecurity</key>
+        <dict>
+            <key>NSAllowsLocalNetworking</key>
+            <true/>
+        </dict>
         {{if .Info.FileAssociations}}
         <key>CFBundleDocumentTypes</key>
         <array>

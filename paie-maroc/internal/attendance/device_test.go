@@ -18,6 +18,7 @@ func TestValidateDevice(t *testing.T) {
 		{name: "mb10 vl", device: attendance.Device{Name: "Entrée", Model: "MB10-VL", Protocol: attendance.ProtocolStandalone, Host: "192.168.1.201", Port: 4370, Enabled: true}},
 		{name: "invalid host", device: attendance.Device{Name: "Entrée", Model: "MB10-VL", Protocol: attendance.ProtocolStandalone, Host: "bad host", Port: 4370}, wantErr: true},
 		{name: "invalid protocol", device: attendance.Device{Name: "Entrée", Model: "MB10-VL", Protocol: "magic", Host: "192.168.1.201", Port: 4370}, wantErr: true},
+		{name: "wireguard requires IP", device: attendance.Device{Name: "Entrée", Model: "MB10-VL", Protocol: attendance.ProtocolStandalone, Transport: attendance.TransportWireGuard, Host: "pointeuse.local", Port: 4370}, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

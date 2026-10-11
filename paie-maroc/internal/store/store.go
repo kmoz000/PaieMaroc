@@ -440,6 +440,8 @@ func (store *Store) prepare() error {
 			name TEXT NOT NULL,
 			model TEXT NOT NULL,
 			protocol TEXT NOT NULL CHECK(protocol IN ('standalone', 'adms', 'biotime')),
+			transport TEXT NOT NULL DEFAULT 'lan' CHECK(transport IN ('lan', 'wireguard')),
+			serial_number TEXT NOT NULL DEFAULT '',
 			host TEXT NOT NULL,
 			port INTEGER NOT NULL CHECK(port BETWEEN 1 AND 65535),
 			enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1)),
@@ -529,6 +531,47 @@ func (store *Store) prepare() error {
 		if _, err := store.db.Exec(statement); err != nil {
 			return fmt.Errorf("initialisation base: %w", err)
 		}
+	}
+	if err := store.ensureColumn("attendance_devices", "transport", "TEXT NOT NULL DEFAULT 'lan' CHECK(transport IN ('lan', 'wireguard'))"); err != nil {
+		return err
+	}
+	if err := store.ensureColumn("attendance_devices", "serial_number", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if _, err := store.db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS attendance_devices_serial_idx
+		ON attendance_devices(serial_number COLLATE NOCASE) WHERE serial_number <> ''`); err != nil {
+		return fmt.Errorf("index des numéros de série pointeuses: %w", err)
+	}
+	return nil
+}
+
+func (store *Store) ensureColumn(table, column, declaration string) error {
+	rows, err := store.db.Query(`PRAGMA table_info(` + table + `)`)
+	if err != nil {
+		return fmt.Errorf("lecture du schéma %s: %w", table, err)
+	}
+	found := false
+	for rows.Next() {
+		var cid int
+		var name, dataType string
+		var notNull, primaryKey int
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &primaryKey); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("lecture du schéma %s: %w", table, err)
+		}
+		if name == column {
+			found = true
+		}
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("fermeture du schéma %s: %w", table, err)
+	}
+	if found {
+		return nil
+	}
+	if _, err := store.db.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + column + ` ` + declaration); err != nil {
+		return fmt.Errorf("migration %s.%s: %w", table, column, err)
 	}
 	return nil
 }

@@ -2004,6 +2004,282 @@ td span small {
   grid-template-columns: minmax(310px, 0.8fr) minmax(490px, 1.2fr);
   gap: 13px;
 }
+.pointer-connectivity {
+  margin-top: 13px;
+  overflow: hidden;
+  border-color: #c9d8e8;
+  background:
+    linear-gradient(115deg, rgba(2, 58, 116, 0.035), transparent 42%),
+    #fff;
+}
+.pointer-connectivity-head {
+  min-height: 76px;
+  padding: 16px 18px;
+  display: grid;
+  grid-template-columns: 38px minmax(260px, 1fr) auto auto;
+  align-items: center;
+  gap: 13px;
+  border-bottom: 1px solid var(--line);
+}
+.pointer-service-mark {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #b9d1e7;
+  border-radius: 9px 9px 9px 3px;
+  color: var(--brand);
+  background: #edf6fc;
+}
+.pointer-connectivity-head h2 {
+  margin: 3px 0 2px;
+  font-size: 13px;
+}
+.pointer-connectivity-head p {
+  margin: 0;
+  color: #697386;
+  font-size: 8px;
+}
+.pointer-service-state {
+  display: flex;
+  gap: 6px;
+}
+.pointer-service-state span {
+  min-width: 92px;
+  padding: 7px 9px;
+  border: 1px solid #d8e1ea;
+  border-radius: 6px 6px 6px 2px;
+  color: #687587;
+  background: #f7f9fb;
+  font-size: 7px;
+  font-weight: 800;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.35px;
+}
+.pointer-service-state span.active {
+  border-color: #9fcfc2;
+  color: #08745a;
+  background: #eef9f5;
+}
+.pointer-paths {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+}
+.pointer-paths article {
+  min-height: 70px;
+  padding: 13px 17px;
+  display: grid;
+  grid-template-columns: 24px 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  border-right: 1px solid var(--line);
+}
+.pointer-paths article:last-child {
+  border-right: 0;
+}
+.pointer-paths b {
+  color: #9aa7b5;
+  font-size: 7px;
+  letter-spacing: 0.5px;
+}
+.pointer-paths svg {
+  color: var(--brand);
+}
+.pointer-paths strong,
+.pointer-paths small {
+  display: block;
+}
+.pointer-paths strong {
+  color: #30364a;
+  font-size: 8px;
+}
+.pointer-paths small {
+  margin-top: 3px;
+  color: #788598;
+  font-size: 7px;
+  line-height: 1.45;
+}
+.pointer-error {
+  margin: 0 18px 14px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid #efbec8;
+  border-radius: 7px 7px 7px 3px;
+  color: #b12647;
+  background: #fff7f8;
+}
+.pointer-error strong,
+.pointer-error small {
+  display: block;
+}
+.pointer-error strong {
+  font-size: 8px;
+}
+.pointer-error small {
+  margin-top: 2px;
+  color: #865467;
+  font-size: 7px;
+}
+.pointer-setup {
+  padding: 18px;
+  border-top: 1px solid var(--line);
+  background: #f8fafc;
+}
+.pointer-setup fieldset {
+  margin: 0 0 12px;
+  padding: 15px;
+  border: 1px solid #d8e2ec;
+  border-radius: 9px 9px 9px 3px;
+  background: #fff;
+}
+.pointer-setup legend {
+  padding: 0 8px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pointer-setup legend > span {
+  width: 25px;
+  height: 25px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px 6px 6px 2px;
+  color: #fff;
+  background: var(--brand);
+  font-size: 7px;
+  font-weight: 900;
+}
+.pointer-setup legend strong,
+.pointer-setup legend small {
+  display: block;
+}
+.pointer-setup legend strong {
+  color: #30364a;
+  font-size: 9px;
+}
+.pointer-setup legend small {
+  margin-top: 2px;
+  color: #7a8798;
+  font-size: 7px;
+}
+.pointer-check {
+  padding: 11px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #d9e3ec;
+  border-radius: 7px 7px 7px 3px;
+  cursor: pointer;
+  background: #fbfcfe;
+}
+.pointer-check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--brand);
+}
+.pointer-check strong,
+.pointer-check small {
+  display: block;
+}
+.pointer-check strong {
+  color: #394154;
+  font-size: 8px;
+}
+.pointer-check small {
+  margin-top: 2px;
+  color: #7c8999;
+  font-size: 7px;
+}
+.pointer-check.consent {
+  align-self: end;
+  border-color: #b9d4e9;
+  background: #f1f8fd;
+}
+.pointer-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.firewall-copy {
+  min-height: 56px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border-left: 3px solid var(--brand);
+  color: var(--brand);
+  background: #f1f7fc;
+}
+.firewall-copy strong,
+.firewall-copy small {
+  display: block;
+}
+.firewall-copy strong {
+  font-size: 8px;
+}
+.firewall-copy small {
+  margin-top: 3px;
+  color: #607387;
+  font-size: 7px;
+  line-height: 1.4;
+}
+.wireguard-identity {
+  margin-top: 12px;
+  padding: 11px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  border: 1px dashed #a9c4dc;
+  border-radius: 7px 7px 7px 3px;
+  background: #f4f9fd;
+}
+.wireguard-identity div {
+  min-width: 0;
+}
+.wireguard-identity small,
+.wireguard-identity strong {
+  display: block;
+}
+.wireguard-identity small {
+  color: #758699;
+  font-size: 6px;
+  font-weight: 800;
+  letter-spacing: 0.45px;
+}
+.wireguard-identity strong {
+  max-width: 620px;
+  margin-top: 4px;
+  overflow: hidden;
+  color: #314158;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.compact-network-grid {
+  max-width: 520px;
+}
+.pointer-setup-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+}
+.pointer-setup-actions > span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #66778a;
+}
+.pointer-setup-actions small {
+  font-size: 7px;
+}
 .device-list {
   overflow: hidden;
 }
@@ -2499,6 +2775,26 @@ td span small {
   .access-layout,
   .attendance-calendar-layout {
     grid-template-columns: 1fr;
+  }
+  .pointer-connectivity-head {
+    grid-template-columns: 38px minmax(250px, 1fr) auto;
+  }
+  .pointer-service-state {
+    grid-column: 2;
+  }
+  .pointer-connectivity-head > .button {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
+  .pointer-paths {
+    grid-template-columns: 1fr;
+  }
+  .pointer-paths article {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .pointer-paths article:last-child {
+    border-bottom: 0;
   }
   .attendance-filters {
     grid-template-columns: repeat(3, 1fr);

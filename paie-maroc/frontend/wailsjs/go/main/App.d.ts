@@ -5,6 +5,7 @@ import {payroll} from '../models';
 import {auth} from '../models';
 import {main} from '../models';
 import {store} from '../models';
+import {pointerservice} from '../models';
 import {exporter} from '../models';
 
 export function AttendanceProfiles():Promise<Array<attendance.Profile>>;
@@ -27,9 +28,13 @@ export function DeletePeriod(arg1:string):Promise<void>;
 
 export function GenerateCNSSBDS(arg1:string):Promise<main.CNSSResult>;
 
+export function GeneratePointerWireGuardIdentity():Promise<pointerservice.Identity>;
+
 export function GetAttendanceWorkPolicy():Promise<attendance.WorkPolicy>;
 
 export function GetAuthState():Promise<main.AuthState>;
+
+export function GetPointerConnectivity():Promise<pointerservice.Status>;
 
 export function ImportEmployeesCSV():Promise<store.ImportStats>;
 
@@ -80,6 +85,8 @@ export function SaveEmployee(arg1:payroll.Employee):Promise<void>;
 export function SaveExport(arg1:main.ExportInput):Promise<main.ExportResult>;
 
 export function SavePeriodEmployee(arg1:string,arg2:payroll.Employee):Promise<void>;
+
+export function SavePointerConnectivity(arg1:pointerservice.Config):Promise<pointerservice.Status>;
 
 export function SetUserEnabled(arg1:number,arg2:boolean):Promise<void>;
 
