@@ -39,6 +39,7 @@ import {
   SetUserEnabled,
   SyncAttendanceDevice,
   TestAttendanceDevice,
+  TestPointerWireGuard,
   ValidatePayroll,
 } from "../wailsjs/go/main/App";
 import {
@@ -61,6 +62,7 @@ import {
 } from "./employee-validation";
 import type { Employee } from "./employee-validation";
 import {DateField, MonthField} from "./date-picker";
+import { parseWireGuardConfig } from "./wireguard-config";
 import "./App.css";
 
 type User = {
@@ -151,6 +153,11 @@ type PointerConnectivityConfig = {
 type PointerConnectivityStatus = {
   collectorActive: boolean;
   wireGuardActive: boolean;
+  wireGuardHandshake: boolean;
+  wireGuardResolvedEndpoint: string;
+  wireGuardLastHandshakeAt: string;
+  wireGuardReceivedBytes: number;
+  wireGuardSentBytes: number;
   lanAddress: string;
   tunnelAddress: string;
   firewallGuidance: string;
@@ -163,6 +170,17 @@ type PointerConnectivityStatus = {
       hasPresharedKey: boolean;
     };
   };
+};
+type PointerConnectivityTest = {
+  target: string;
+  reachable: boolean;
+  latencyMilliseconds: number;
+  handshakeEstablished: boolean;
+  lastHandshakeAt: string;
+  resolvedEndpoint: string;
+  receivedBytes: number;
+  sentBytes: number;
+  message: string;
 };
 type Punch = {
   id: number;
@@ -2640,7 +2658,11 @@ function PointerConnectivityPanel({
     [open, setOpen] = useState(false),
     [saving, setSaving] = useState(false),
     [error, setError] = useState(""),
-    [generatedPublicKey, setGeneratedPublicKey] = useState("");
+    [generatedPublicKey, setGeneratedPublicKey] = useState(""),
+    [importText, setImportText] = useState(""),
+    [testTarget, setTestTarget] = useState("10.255.255.34"),
+    [testingTunnel, setTestingTunnel] = useState(false),
+    [testResult, setTestResult] = useState<PointerConnectivityTest | null>(null);
 
   const applyStatus = (value: PointerConnectivityStatus) => {
     setStatus(value);
@@ -2673,6 +2695,11 @@ function PointerConnectivityPanel({
     applyStatus({
       collectorActive: false,
       wireGuardActive: false,
+      wireGuardHandshake: false,
+      wireGuardResolvedEndpoint: "",
+      wireGuardLastHandshakeAt: "",
+      wireGuardReceivedBytes: 0,
+      wireGuardSentBytes: 0,
       lanAddress: "",
       tunnelAddress: "",
       firewallGuidance:
@@ -2709,6 +2736,62 @@ function PointerConnectivityPanel({
       notify("Nouvelle identité WireGuard créée. La clé privée restera masquée.");
     } catch (reason) {
       setError(friendlyError(reason));
+    }
+  }
+
+  function importConfiguration() {
+    try {
+      const imported = parseWireGuardConfig(importText);
+      setDraft((current) => ({
+        ...current,
+        wireGuard: {
+          ...current.wireGuard,
+          enabled: true,
+          address: imported.address,
+          privateKey: imported.privateKey,
+          peerPublicKey: imported.peerPublicKey,
+          presharedKey: imported.presharedKey,
+          endpoint: imported.endpoint,
+          allowedIPs: imported.allowedIPs,
+          persistentKeepaliveSeconds: imported.persistentKeepaliveSeconds,
+          mtu: imported.mtu || current.wireGuard.mtu,
+        },
+      }));
+      setImportText("");
+      setError("");
+      notify("Configuration importée : clés Interface et Peer placées dans les bons champs.");
+    } catch (reason) {
+      setError(friendlyError(reason));
+    }
+  }
+
+  async function testTunnel() {
+    setTestingTunnel(true);
+    setError("");
+    setTestResult(null);
+    try {
+      const result = isNative
+        ? await TestPointerWireGuard(testTarget)
+        : {
+            target: testTarget,
+            reachable: true,
+            latencyMilliseconds: 18,
+            handshakeEstablished: true,
+            lastHandshakeAt: new Date().toISOString(),
+            resolvedEndpoint: "172.239.44.171:51820",
+            receivedBytes: 128,
+            sentBytes: 128,
+            message: `Pointeuse ${testTarget} joignable via WireGuard en 18 ms`,
+          };
+      setTestResult(result as PointerConnectivityTest);
+      if (isNative) {
+        const nextStatus = await GetPointerConnectivity();
+        applyStatus(nextStatus as PointerConnectivityStatus);
+      }
+    } catch (reason) {
+      setError(friendlyError(reason));
+    } finally {
+      setTestingTunnel(false);
     }
   }
 
@@ -2767,7 +2850,7 @@ function PointerConnectivityPanel({
             Collecteur {status?.collectorActive ? "actif" : "arrêté"}
           </span>
           <span className={status?.wireGuardActive ? "active" : "idle"}>
-            Tunnel {status?.wireGuardActive ? "actif" : "arrêté"}
+            WireGuard {status?.wireGuardHandshake ? "connecté" : status?.wireGuardActive ? "initialisé" : "arrêté"}
           </span>
         </div>
         <button className="button secondary" onClick={() => setOpen((value) => !value)} disabled={!isAdmin}>
@@ -2792,6 +2875,23 @@ function PointerConnectivityPanel({
 
       {status?.lastError && <div className="pointer-error" role="alert"><Icon name="warning" /><span><strong>Service non démarré</strong><small>{status.lastError}</small></span></div>}
       {error && <div className="pointer-error" role="alert"><Icon name="warning" /><span><strong>Configuration à corriger</strong><small>{error}</small></span></div>}
+
+      {status?.wireGuardActive && <div className="wireguard-diagnostic">
+        <div className="wireguard-diagnostic-copy">
+          <span className="eyebrow">TEST DU TUNNEL</span>
+          <strong>{status.wireGuardHandshake ? "Handshake établi" : "En attente du premier handshake"}</strong>
+          <small>Endpoint résolu : {status.wireGuardResolvedEndpoint || "en attente"}</small>
+        </div>
+        <TextField label="IP de la pointeuse à tester" value={testTarget} set={setTestTarget} placeholder="10.255.255.34" inputMode="decimal" />
+        <button type="button" className="button secondary" onClick={testTunnel} disabled={testingTunnel}>
+          <Icon name="send" /> {testingTunnel ? "Test…" : "Tester le ping"}
+        </button>
+        {testResult && <div className={testResult.reachable ? "wireguard-test-result success" : "wireguard-test-result failure"} role="status">
+          <strong>{testResult.reachable ? `${testResult.latencyMilliseconds} ms` : testResult.handshakeEstablished ? "Tunnel OK · cible muette" : "Aucun handshake"}</strong>
+          <small>{testResult.message}</small>
+          <small>{testResult.resolvedEndpoint} · RX {testResult.receivedBytes} o · TX {testResult.sentBytes} o</small>
+        </div>}
+      </div>}
 
       {open && (
         <form className="pointer-setup" onSubmit={save}>
@@ -2820,12 +2920,17 @@ function PointerConnectivityPanel({
               <span><strong>Activer le tunnel privé des pointeuses</strong><small>Seules les fiches marquées « WireGuard » l’utiliseront.</small></span>
             </label>
             {draft.wireGuard.enabled && <>
+              <div className="wireguard-import">
+                <div><strong>Importer un fichier WireGuard</strong><small>Collez le contenu complet. DNS est ignoré car le tunnel ne sert qu’aux pointeuses.</small></div>
+                <textarea aria-label="Configuration WireGuard à importer" value={importText} onChange={(event) => setImportText(event.target.value)} placeholder={'[Interface]\nPrivateKey = …\nAddress = 10.255.255.36/32\n\n[Peer]\nPublicKey = …\nEndpoint = wg.example.ma:51820\nAllowedIPs = 10.255.255.32/27'} spellCheck={false} />
+                <button type="button" className="button secondary" onClick={importConfiguration} disabled={!importText.trim()}>Analyser et remplir</button>
+              </div>
               <div className="pointer-grid wireguard-grid">
                 <TextField label="Adresse privée PaieMaroc" value={draft.wireGuard.address} set={(address) => setDraft({ ...draft, wireGuard: { ...draft.wireGuard, address } })} placeholder="10.77.0.2/32" />
-                <TextField label="Passerelle WireGuard" value={draft.wireGuard.endpoint} set={(endpoint) => setDraft({ ...draft, wireGuard: { ...draft.wireGuard, endpoint } })} placeholder="vpn.societe.ma:51820" hint="Nom DNS ou adresse IP — résolution automatique au démarrage" />
-                <TextField label="Clé publique de la passerelle" value={draft.wireGuard.peerPublicKey} set={(peerPublicKey) => setDraft({ ...draft, wireGuard: { ...draft.wireGuard, peerPublicKey } })} />
+                <TextField label="[Interface] PrivateKey" type="password" value={draft.wireGuard.privateKey || ""} set={(privateKey) => setDraft({ ...draft, wireGuard: { ...draft.wireGuard, privateKey } })} required={!status?.config.wireGuard.hasPrivateKey} autoComplete="new-password" hint={status?.config.wireGuard.hasPrivateKey ? "Laisser vide pour conserver la clé protégée" : "Clé privée de cette application"} />
+                <TextField label="[Peer] PublicKey" value={draft.wireGuard.peerPublicKey} set={(peerPublicKey) => setDraft({ ...draft, wireGuard: { ...draft.wireGuard, peerPublicKey } })} hint="Clé publique de la passerelle distante" />
+                <TextField label="Passerelle WireGuard · [Peer] Endpoint" value={draft.wireGuard.endpoint} set={(endpoint) => setDraft({ ...draft, wireGuard: { ...draft.wireGuard, endpoint } })} placeholder="vpn.societe.ma:51820" hint="Nom DNS ou adresse IP — résolution automatique au démarrage" />
                 <TextField label="Sous-réseaux distants des pointeuses" value={draft.wireGuard.allowedIPs.join(", ")} set={(value) => setDraft({ ...draft, wireGuard: { ...draft.wireGuard, allowedIPs: networkList(value) } })} hint="Les routes par défaut sont refusées" placeholder="10.90.0.0/24" />
-                <TextField label="Nouvelle clé privée" type="password" value={draft.wireGuard.privateKey || ""} set={(privateKey) => setDraft({ ...draft, wireGuard: { ...draft.wireGuard, privateKey } })} required={!status?.config.wireGuard.hasPrivateKey} autoComplete="new-password" hint={status?.config.wireGuard.hasPrivateKey ? "Laisser vide pour conserver la clé protégée" : "Générez une identité ci-dessous"} />
                 <TextField label="Clé prépartagée (optionnelle)" type="password" value={draft.wireGuard.presharedKey || ""} set={(presharedKey) => setDraft({ ...draft, wireGuard: { ...draft.wireGuard, presharedKey } })} required={false} autoComplete="new-password" />
               </div>
               <div className="wireguard-identity">

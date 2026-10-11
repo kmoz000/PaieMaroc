@@ -633,6 +633,18 @@ func (app *App) SavePointerConnectivity(config pointerservice.Config) (pointerse
 	return app.pointerManager.Status(), nil
 }
 
+func (app *App) TestPointerWireGuard(target string) (pointerservice.ConnectivityTestResult, error) {
+	if _, err := app.requireAuthenticated(); err != nil {
+		return pointerservice.ConnectivityTestResult{}, err
+	}
+	if app.pointerManager == nil {
+		return pointerservice.ConnectivityTestResult{}, errors.New("service réseau des pointeuses indisponible")
+	}
+	testContext, cancel := context.WithTimeout(app.ctx, 7*time.Second)
+	defer cancel()
+	return app.pointerManager.TestWireGuard(testContext, strings.TrimSpace(target))
+}
+
 func (app *App) ListAttendanceDevices() ([]attendance.Device, error) {
 	if _, err := app.requireAuthenticated(); err != nil {
 		return nil, err

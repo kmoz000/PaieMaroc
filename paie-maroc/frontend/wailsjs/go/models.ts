@@ -857,6 +857,34 @@ export namespace pointerservice {
 		    return a;
 		}
 	}
+	export class ConnectivityTestResult {
+	    target: string;
+	    reachable: boolean;
+	    latencyMilliseconds: number;
+	    handshakeEstablished: boolean;
+	    lastHandshakeAt: string;
+	    resolvedEndpoint: string;
+	    receivedBytes: number;
+	    sentBytes: number;
+	    message: string;
+
+	    static createFrom(source: any = {}) {
+	        return new ConnectivityTestResult(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.target = source["target"];
+	        this.reachable = source["reachable"];
+	        this.latencyMilliseconds = source["latencyMilliseconds"];
+	        this.handshakeEstablished = source["handshakeEstablished"];
+	        this.lastHandshakeAt = source["lastHandshakeAt"];
+	        this.resolvedEndpoint = source["resolvedEndpoint"];
+	        this.receivedBytes = source["receivedBytes"];
+	        this.sentBytes = source["sentBytes"];
+	        this.message = source["message"];
+	    }
+	}
 
 	export class Identity {
 	    privateKey: string;
@@ -938,6 +966,11 @@ export namespace pointerservice {
 	export class Status {
 	    collectorActive: boolean;
 	    wireGuardActive: boolean;
+	    wireGuardHandshake: boolean;
+	    wireGuardResolvedEndpoint: string;
+	    wireGuardLastHandshakeAt: string;
+	    wireGuardReceivedBytes: number;
+	    wireGuardSentBytes: number;
 	    lanAddress: string;
 	    tunnelAddress: string;
 	    firewallGuidance: string;
@@ -952,6 +985,11 @@ export namespace pointerservice {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.collectorActive = source["collectorActive"];
 	        this.wireGuardActive = source["wireGuardActive"];
+	        this.wireGuardHandshake = source["wireGuardHandshake"];
+	        this.wireGuardResolvedEndpoint = source["wireGuardResolvedEndpoint"];
+	        this.wireGuardLastHandshakeAt = source["wireGuardLastHandshakeAt"];
+	        this.wireGuardReceivedBytes = source["wireGuardReceivedBytes"];
+	        this.wireGuardSentBytes = source["wireGuardSentBytes"];
 	        this.lanAddress = source["lanAddress"];
 	        this.tunnelAddress = source["tunnelAddress"];
 	        this.firewallGuidance = source["firewallGuidance"];

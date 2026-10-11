@@ -94,4 +94,6 @@ export function SyncAttendanceDevice(arg1:number):Promise<attendance.SyncResult>
 
 export function TestAttendanceDevice(arg1:attendance.Device):Promise<attendance.ProbeResult>;
 
+export function TestPointerWireGuard(arg1:string):Promise<pointerservice.ConnectivityTestResult>;
+
 export function ValidatePayroll(arg1:Array<payroll.Employee>):Promise<Array<payroll.ValidationIssue>>;

@@ -18,10 +18,18 @@ Sur Windows, autorisez PaieMaroc uniquement sur les réseaux privés lorsque le 
 
 Le tunnel utilise `wireguard-go` et une pile TCP/IP interne. Il ne crée pas d’interface noyau, ne modifie pas les routes ou le DNS du système et ne nécessite pas les outils `wg`/`wg-quick`.
 
-1. Générez l’identité locale dans PaieMaroc.
-2. Copiez uniquement sa clé publique sur la passerelle distante.
-3. Saisissez la clé publique et l’adresse publique de la passerelle.
+1. Importez le fichier `.conf`, ou placez `PrivateKey` de `[Interface]` dans le champ privé et `PublicKey` de `[Peer]` dans le champ public de la passerelle. Ne les inversez pas.
+2. Si PaieMaroc génère une nouvelle identité, copiez uniquement sa clé publique sur la passerelle distante.
+3. Déclarez cette clé côté serveur avec l’adresse PaieMaroc en `/32`, puis saisissez l’adresse publique de la passerelle.
 4. Limitez `AllowedIPs` aux réseaux privés des pointeuses. Les routes `/0` sont refusées.
 5. Utilisez un maintien NAT de 25 secondes lorsque PaieMaroc se trouve derrière NAT.
 
 La clé privée reste dans le dossier de configuration propre à l’utilisateur et n’est jamais renvoyée à l’interface après sauvegarde. Le fichier reçoit les permissions `0600` sur macOS/Linux et hérite des ACL du profil utilisateur sous Windows.
+
+## Diagnostic du tunnel
+
+Le statut « initialisé » confirme seulement que le moteur userspace a démarré. « Connecté » exige un handshake WireGuard réel. Utilisez **Tester le ping** avec l’adresse IP d’une pointeuse : PaieMaroc envoie l’ICMP dans son netstack interne et affiche l’endpoint résolu, le dernier handshake ainsi que les compteurs RX/TX.
+
+- Aucun handshake et `RX 0` : vérifiez les deux clés, le pair `/32` côté serveur, l’écoute UDP et la redirection du port 51820.
+- Handshake établi mais ping sans réponse : vérifiez le routage de la passerelle vers la pointeuse, son pare-feu et son adresse.
+- Le champ `DNS` d’un fichier WireGuard est ignoré : PaieMaroc utilise le DNS du système uniquement pour résoudre l’endpoint public.

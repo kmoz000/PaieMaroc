@@ -2123,6 +2123,56 @@ td span small {
   color: #865467;
   font-size: 7px;
 }
+.wireguard-diagnostic {
+  margin: 0 18px 14px;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: minmax(190px, 1fr) minmax(210px, 0.8fr) auto;
+  align-items: end;
+  gap: 12px;
+  border: 1px solid #c5d8e9;
+  border-radius: 8px 8px 8px 3px;
+  background: #f5f9fd;
+}
+.wireguard-diagnostic-copy strong,
+.wireguard-diagnostic-copy small,
+.wireguard-test-result strong,
+.wireguard-test-result small {
+  display: block;
+}
+.wireguard-diagnostic-copy strong {
+  margin-top: 3px;
+  color: #314158;
+  font-size: 9px;
+}
+.wireguard-diagnostic-copy small {
+  margin-top: 3px;
+  color: #718195;
+  font-size: 7px;
+}
+.wireguard-test-result {
+  grid-column: 1 / -1;
+  padding: 9px 11px;
+  border: 1px solid #d6e0e9;
+  border-radius: 6px 6px 6px 2px;
+  background: #fff;
+}
+.wireguard-test-result.success {
+  border-color: #9fcfc2;
+  color: #08745a;
+}
+.wireguard-test-result.failure {
+  border-color: #e7c59c;
+  color: #8a5b16;
+}
+.wireguard-test-result strong {
+  font-size: 8px;
+}
+.wireguard-test-result small {
+  margin-top: 3px;
+  color: #68778a;
+  font-size: 7px;
+}
 .pointer-setup {
   padding: 18px;
   border-top: 1px solid var(--line);
@@ -2238,6 +2288,46 @@ td span small {
   border: 1px dashed #a9c4dc;
   border-radius: 7px 7px 7px 3px;
   background: #f4f9fd;
+}
+.wireguard-import {
+  margin-top: 12px;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: minmax(180px, 0.65fr) minmax(300px, 1.35fr) auto;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #c9dbea;
+  border-radius: 7px 7px 7px 3px;
+  background: #f6fafd;
+}
+.wireguard-import strong,
+.wireguard-import small {
+  display: block;
+}
+.wireguard-import strong {
+  color: #34435a;
+  font-size: 8px;
+}
+.wireguard-import small {
+  margin-top: 3px;
+  color: #718195;
+  font-size: 7px;
+  line-height: 1.4;
+}
+.wireguard-import textarea {
+  min-height: 84px;
+  padding: 9px 10px;
+  resize: vertical;
+  border: 1px solid #cbd8e4;
+  border-radius: 6px 6px 6px 2px;
+  outline: none;
+  color: #34435a;
+  background: #fff;
+  font: 7px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.wireguard-import textarea:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px rgba(8, 116, 220, 0.1);
 }
 .wireguard-identity div {
   min-width: 0;
@@ -2795,6 +2885,19 @@ td span small {
   }
   .pointer-paths article:last-child {
     border-bottom: 0;
+  }
+  .wireguard-diagnostic {
+    grid-template-columns: minmax(220px, 1fr) auto;
+  }
+  .wireguard-diagnostic-copy,
+  .wireguard-test-result {
+    grid-column: 1 / -1;
+  }
+  .wireguard-import {
+    grid-template-columns: 1fr;
+  }
+  .wireguard-import .button {
+    justify-self: start;
   }
   .attendance-filters {
     grid-template-columns: repeat(3, 1fr);

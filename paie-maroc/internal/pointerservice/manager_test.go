@@ -3,6 +3,7 @@ package pointerservice
 import (
 	"context"
 	"net"
+	"net/netip"
 	"testing"
 )
 
@@ -34,5 +35,16 @@ func TestManagerStartsAndStopsLocalCollector(t *testing.T) {
 	manager.Close()
 	if status := manager.Status(); status.CollectorActive || status.WireGuardActive {
 		t.Fatalf("status after close = %+v", status)
+	}
+}
+
+func TestAddressAllowedUsesOnlyConfiguredPointerNetworks(t *testing.T) {
+	t.Parallel()
+	allowed := []string{"10.255.255.32/27"}
+	if !addressAllowed(netip.MustParseAddr("10.255.255.34"), allowed) {
+		t.Fatal("expected pointer target to be allowed")
+	}
+	if addressAllowed(netip.MustParseAddr("10.255.255.64"), allowed) {
+		t.Fatal("target outside configured pointer network was allowed")
 	}
 }

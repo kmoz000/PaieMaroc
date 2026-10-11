@@ -5,6 +5,7 @@ go 1.27.2
 require (
 	github.com/wailsapp/wails/v2 v2.15.0
 	golang.org/x/crypto v0.53.0
+	golang.org/x/net v0.56.0
 	golang.zx2c4.com/wireguard v0.0.0-20261006164505-2631ce99a06f
 	modernc.org/sqlite v1.60.1
 )
@@ -38,7 +39,6 @@ require (
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/wailsapp/go-webview2 v1.0.22 // indirect
 	github.com/wailsapp/mimetype v1.4.1 // indirect
-	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.39.0 // indirect
 	golang.org/x/time v0.8.0 // indirect

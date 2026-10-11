@@ -174,6 +174,10 @@ export function TestAttendanceDevice(arg1) {
   return window['go']['main']['App']['TestAttendanceDevice'](arg1);
 }
 
+export function TestPointerWireGuard(arg1) {
+  return window['go']['main']['App']['TestPointerWireGuard'](arg1);
+}
+
 export function ValidatePayroll(arg1) {
   return window['go']['main']['App']['ValidatePayroll'](arg1);
 }

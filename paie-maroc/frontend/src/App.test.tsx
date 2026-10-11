@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import App from "./App";
@@ -177,5 +177,21 @@ describe("pointer connectivity", () => {
     );
     expect(screen.getByLabelText(/Passerelle WireGuard/)).toBeVisible();
     expect(screen.getByText(/Les routes par défaut sont refusées/)).toBeVisible();
+
+    fireEvent.change(
+      screen.getByLabelText("Configuration WireGuard à importer"),
+      { target: { value: `[Interface]
+PrivateKey = interface-private
+Address = 10.255.255.36/32
+
+[Peer]
+PublicKey = gateway-public
+Endpoint = wg.wantastic.app:51820
+AllowedIPs = 10.255.255.32/27
+PersistentKeepalive = 25` } },
+    );
+    await user.click(screen.getByRole("button", { name: "Analyser et remplir" }));
+    expect(screen.getByLabelText(/\[Interface\] PrivateKey/)).toHaveValue("interface-private");
+    expect(screen.getByLabelText(/\[Peer\] PublicKey/)).toHaveValue("gateway-public");
   });
 });

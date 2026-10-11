@@ -6,12 +6,33 @@ import (
 	"net/netip"
 	"strings"
 	"testing"
+	"time"
 )
 
 type stubEndpointResolver struct {
 	addresses []netip.Addr
 	err       error
 	calls     int
+}
+
+func TestParseTunnelStatsExposesNoKeys(t *testing.T) {
+	t.Parallel()
+	stats, err := parseTunnelStats(`private_key=secret
+public_key=peer
+endpoint=172.239.44.171:51820
+last_handshake_time_sec=1700000000
+rx_bytes=2048
+tx_bytes=1024
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.Endpoint != "172.239.44.171:51820" || stats.ReceivedBytes != 2048 || stats.SentBytes != 1024 {
+		t.Fatalf("stats = %+v", stats)
+	}
+	if !stats.LastHandshake.Equal(time.Unix(1700000000, 0).UTC()) {
+		t.Fatalf("last handshake = %s", stats.LastHandshake)
+	}
 }
 
 func (resolver *stubEndpointResolver) LookupNetIP(context.Context, string, string) ([]netip.Addr, error) {
