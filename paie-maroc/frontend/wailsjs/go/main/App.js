@@ -38,6 +38,10 @@ export function DeletePeriod(arg1) {
   return window['go']['main']['App']['DeletePeriod'](arg1);
 }
 
+export function DeleteSignatureTemplate(arg1) {
+  return window['go']['main']['App']['DeleteSignatureTemplate'](arg1);
+}
+
 export function GenerateCNSSBDS(arg1) {
   return window['go']['main']['App']['GenerateCNSSBDS'](arg1);
 }
@@ -56,6 +60,10 @@ export function GetAuthState() {
 
 export function GetPointerConnectivity() {
   return window['go']['main']['App']['GetPointerConnectivity']();
+}
+
+export function GetPrinterState() {
+  return window['go']['main']['App']['GetPrinterState']();
 }
 
 export function ImportEmployeesCSV() {
@@ -98,6 +106,10 @@ export function ListPeriods() {
   return window['go']['main']['App']['ListPeriods']();
 }
 
+export function ListSignatureTemplates() {
+  return window['go']['main']['App']['ListSignatureTemplates']();
+}
+
 export function ListUsers() {
   return window['go']['main']['App']['ListUsers']();
 }
@@ -112,6 +124,10 @@ export function Logout() {
 
 export function PreviewExport(arg1) {
   return window['go']['main']['App']['PreviewExport'](arg1);
+}
+
+export function PrintSignedDocument(arg1) {
+  return window['go']['main']['App']['PrintSignedDocument'](arg1);
 }
 
 export function ReopenPeriod(arg1) {
@@ -160,6 +176,18 @@ export function SavePeriodEmployee(arg1, arg2) {
 
 export function SavePointerConnectivity(arg1) {
   return window['go']['main']['App']['SavePointerConnectivity'](arg1);
+}
+
+export function SaveSignatureTemplate(arg1) {
+  return window['go']['main']['App']['SaveSignatureTemplate'](arg1);
+}
+
+export function SaveSignedDocument(arg1, arg2) {
+  return window['go']['main']['App']['SaveSignedDocument'](arg1, arg2);
+}
+
+export function SetDefaultPrinter(arg1) {
+  return window['go']['main']['App']['SetDefaultPrinter'](arg1);
 }
 
 export function SetUserEnabled(arg1, arg2) {

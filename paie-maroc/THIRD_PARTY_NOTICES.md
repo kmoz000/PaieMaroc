@@ -42,3 +42,20 @@ wireguard-go's userspace network stack depends on
 [gVisor](https://gvisor.dev/), copyright The gVisor Authors. gVisor is
 distributed under the Apache License 2.0. Its license and notices are
 available from the upstream project and the corresponding Go module.
+
+## rembg-webgpu
+
+The optional AI cutout step on the signature page uses
+[rembg-webgpu](https://github.com/Remove-Background-ai/rembg-webgpu) by
+rembg.com, distributed under the RemBG Attribution License (MIT-compatible).
+The model weights (~45 MB) are downloaded on first use and cached locally;
+no document or signature ever leaves the machine.
+
+## pdfjs-dist, pdf-lib, docx-preview, html2canvas
+
+Document rendering and signing on the signature page use
+[pdf.js](https://github.com/mozilla/pdf.js) (Apache-2.0),
+[pdf-lib](https://github.com/Hopding/pdf-lib) (MIT),
+[docx-preview](https://github.com/VolodymyrBaydalka/docxjs) (Apache-2.0) and
+[html2canvas](https://github.com/niklasvh/html2canvas) (MIT). All processing
+is local to the embedded webview.

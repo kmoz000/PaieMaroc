@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useId, useMemo, useState } from "react";
 import type { FormEvent, ReactElement, ReactNode } from "react";
 import {
   AttendanceProfiles,
@@ -64,6 +64,10 @@ import type { Employee } from "./employee-validation";
 import {DateField, MonthField} from "./date-picker";
 import { parseWireGuardConfig } from "./wireguard-config";
 import "./App.css";
+
+// Page de signature chargée à la demande : ses bibliothèques (rendu PDF,
+// nettoyage d'image) ne pèsent pas sur le démarrage de l'application.
+const SignaturePage = lazy(() => import("./signature-page"));
 
 type User = {
   id: number;
@@ -236,6 +240,7 @@ type WorkPolicy = {
   rulesVersion: string;
 };
 type Route =
+  | "signature"
   | "overview"
   | "employees"
   | "payroll"
@@ -467,6 +472,14 @@ function Icon({ name, size = 18 }: { name: string; size?: number }) {
         <circle cx="5" cy="12" r="1" />
         <circle cx="12" cy="12" r="1" />
         <circle cx="19" cy="12" r="1" />
+      </>
+    ),
+    pen: (
+      <>
+        <path d="M12 19l7-7 3 3-7 7-3-3z" />
+        <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+        <path d="M2 2l7.586 7.586" />
+        <circle cx="11" cy="11" r="2" />
       </>
     ),
   };
@@ -944,6 +957,10 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
     items: [Route, string, string][];
   }[] = [
     {
+      label: "DOCUMENTS",
+      items: [["signature", "Signer un document", "pen"]],
+    },
+    {
       label: "PILOTAGE",
       items: [
         ["overview", "Vue d’ensemble", "grid"],
@@ -968,7 +985,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
     },
   ];
   if (user.role === "admin")
-    navSections[2].items.push(["access", "Accès & utilisateurs", "key"]);
+    navSections[3].items.push(["access", "Accès & utilisateurs", "key"]);
   const nav = navSections.flatMap((section) => section.items);
   const activeLabel = nav.find((item) => item[0] === route)?.[1] || "";
   const activeIndex = nav.findIndex((item) => item[0] === route) + 1;
@@ -1059,6 +1076,17 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
               <span className="spinner" />
               Chargement…
             </div>
+          ) : route === "signature" ? (
+            <Suspense
+              fallback={
+                <div className="panel loading">
+                  <span className="spinner" />
+                  Ouverture de l'atelier de signature…
+                </div>
+              }
+            >
+              <SignaturePage notify={setMessage} />
+            </Suspense>
           ) : route === "access" ? (
             <AccessPage current={user} notify={setMessage} />
           ) : route === "devices" ? (

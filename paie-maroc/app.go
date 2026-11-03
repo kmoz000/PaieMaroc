@@ -25,17 +25,19 @@ import (
 
 // App is the Wails boundary. Business rules remain in internal packages.
 type App struct {
-	ctx                  context.Context
-	store                *store.Store
-	startupErr           error
-	sessionMu            sync.RWMutex
-	sessionID            int64
-	attendanceSyncMu     sync.Mutex
-	attendanceSyncCancel context.CancelFunc
-	attendanceSyncWG     sync.WaitGroup
-	pointerManager       *pointerservice.Manager
-	pointerConfigPath    string
-	pointerStartupErr    error
+	ctx                    context.Context
+	store                  *store.Store
+	startupErr             error
+	sessionMu              sync.RWMutex
+	sessionID              int64
+	attendanceSyncMu       sync.Mutex
+	attendanceSyncCancel   context.CancelFunc
+	attendanceSyncWG       sync.WaitGroup
+	pointerManager         *pointerservice.Manager
+	pointerConfigPath      string
+	pointerStartupErr      error
+	printingConfigPath     string
+	signatureTemplatesPath string
 }
 
 type AuthState struct {
@@ -113,6 +115,8 @@ func (app *App) startup(ctx context.Context) {
 		app.startupErr = fmt.Errorf("création du dossier de données: %w", err)
 		return
 	}
+	app.printingConfigPath = filepath.Join(appDir, "printing.json")
+	app.signatureTemplatesPath = filepath.Join(appDir, "signature-templates.json")
 	app.store, app.startupErr = store.Open(filepath.Join(appDir, "paie-maroc.db"))
 	if app.startupErr == nil {
 		app.pointerConfigPath = filepath.Join(appDir, "pointer-connectivity.json")

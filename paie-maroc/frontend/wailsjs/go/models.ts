@@ -1,5 +1,5 @@
 export namespace attendance {
-
+	
 	export class Device {
 	    id: number;
 	    name: string;
@@ -13,11 +13,11 @@ export namespace attendance {
 	    lastStatus: string;
 	    lastCheckedAt: string;
 	    linkedUsers: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Device(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -42,11 +42,11 @@ export namespace attendance {
 	    premiumBasisPoints: number;
 	    status: string;
 	    source: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Holiday(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.date = source["date"];
@@ -62,11 +62,11 @@ export namespace attendance {
 	    reachable: boolean;
 	    latencyMs: number;
 	    message: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ProbeResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.reachable = source["reachable"];
@@ -82,11 +82,11 @@ export namespace attendance {
 	    fingerCapacity: number;
 	    maxEvents: number;
 	    notes: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Profile(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.model = source["model"];
@@ -113,11 +113,11 @@ export namespace attendance {
 	    edited: boolean;
 	    updatedAt: string;
 	    unlinked: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Punch(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -145,11 +145,11 @@ export namespace attendance {
 	    beforeJson: string;
 	    afterJson: string;
 	    changedAt: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new PunchChange(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -170,11 +170,11 @@ export namespace attendance {
 	    query: string;
 	    cursor: number;
 	    limit: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new PunchFilter(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.from = source["from"];
@@ -195,11 +195,11 @@ export namespace attendance {
 	    verification: string;
 	    note: string;
 	    reason: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new PunchInput(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -217,11 +217,11 @@ export namespace attendance {
 	    nextCursor: number;
 	    total: number;
 	    unlinked: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new PunchPage(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.items = this.convertValues(source["items"], Punch);
@@ -229,7 +229,7 @@ export namespace attendance {
 	        this.total = source["total"];
 	        this.unlinked = source["unlinked"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -256,11 +256,11 @@ export namespace attendance {
 	    ignored: number;
 	    unlinked: number;
 	    message: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new SyncResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.deviceId = source["deviceId"];
@@ -284,11 +284,11 @@ export namespace attendance {
 	    restDayPremiumBasisPoints: number;
 	    restNightPremiumBasisPoints: number;
 	    rulesVersion: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new WorkPolicy(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.sector = source["sector"];
@@ -308,17 +308,17 @@ export namespace attendance {
 }
 
 export namespace auth {
-
+	
 	export class CreateInput {
 	    username: string;
 	    displayName: string;
 	    password: string;
 	    role: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new CreateInput(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.username = source["username"];
@@ -335,11 +335,11 @@ export namespace auth {
 	    enabled: boolean;
 	    createdAt: string;
 	    lastLoginAt: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new User(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -355,17 +355,17 @@ export namespace auth {
 }
 
 export namespace exporter {
-
+	
 	export class Company {
 	    name: string;
 	    affiliateCnss: string;
 	    rib: string;
 	    participant: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Company(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -379,11 +379,11 @@ export namespace exporter {
 	    totalCentimes: number;
 	    fileCount: number;
 	    contract: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new StreamResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.recordCount = source["recordCount"];
@@ -396,21 +396,21 @@ export namespace exporter {
 }
 
 export namespace main {
-
+	
 	export class AttendanceExportInput {
 	    filter: attendance.PunchFilter;
 	    columns: string[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new AttendanceExportInput(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.filter = this.convertValues(source["filter"], attendance.PunchFilter);
 	        this.columns = source["columns"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -432,11 +432,11 @@ export namespace main {
 	export class AttendanceExportResult {
 	    path: string;
 	    recordCount: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new AttendanceExportResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.path = source["path"];
@@ -447,18 +447,18 @@ export namespace main {
 	    setupRequired: boolean;
 	    authenticated: boolean;
 	    user?: auth.User;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new AuthState(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.setupRequired = source["setupRequired"];
 	        this.authenticated = source["authenticated"];
 	        this.user = this.convertValues(source["user"], auth.User);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -485,11 +485,11 @@ export namespace main {
 	    employeeCount: number;
 	    grossCentimes: number;
 	    cappedCentimes: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new CNSSResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.path = source["path"];
@@ -508,11 +508,11 @@ export namespace main {
 	    period: string;
 	    executionDate: string;
 	    batchNumber: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ExportInput(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.format = source["format"];
@@ -522,7 +522,7 @@ export namespace main {
 	        this.executionDate = source["executionDate"];
 	        this.batchNumber = source["batchNumber"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -548,11 +548,11 @@ export namespace main {
 	    recordCount: number;
 	    totalCentimes: number;
 	    contract: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ExportPreview(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -568,11 +568,11 @@ export namespace main {
 	    recordCount: number;
 	    totalCentimes: number;
 	    contract: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ExportResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.path = source["path"];
@@ -587,11 +587,11 @@ export namespace main {
 	    period: string;
 	    executionDate: string;
 	    batchNumber: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new LargeExportInput(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.format = source["format"];
@@ -600,7 +600,7 @@ export namespace main {
 	        this.executionDate = source["executionDate"];
 	        this.batchNumber = source["batchNumber"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -619,11 +619,57 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class PrinterState {
+	    printers: printing.Printer[];
+	    defaultPrinter: string;
+	    configured: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new PrinterState(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.printers = this.convertValues(source["printers"], printing.Printer);
+	        this.defaultPrinter = source["defaultPrinter"];
+	        this.configured = source["configured"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class SignedDocumentResult {
+	    path: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SignedDocumentResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	    }
+	}
 
 }
 
 export namespace payroll {
-
+	
 	export class Employee {
 	    id: string;
 	    firstName: string;
@@ -636,11 +682,11 @@ export namespace payroll {
 	    grossCentimes: number;
 	    exemptCentimes: number;
 	    advanceCentimes: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Employee(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -670,11 +716,11 @@ export namespace payroll {
 	    trainingTax: number;
 	    employerCost: number;
 	    rulesVersion: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Result(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.employee = this.convertValues(source["employee"], Employee);
@@ -691,7 +737,7 @@ export namespace payroll {
 	        this.employerCost = source["employerCost"];
 	        this.rulesVersion = source["rulesVersion"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -719,11 +765,11 @@ export namespace payroll {
 	    employerChargesTotal: number;
 	    employerCostCentimes: number;
 	    rulesVersion: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new BatchResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.rows = this.convertValues(source["rows"], Result);
@@ -735,7 +781,7 @@ export namespace payroll {
 	        this.employerCostCentimes = source["employerCostCentimes"];
 	        this.rulesVersion = source["rulesVersion"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -754,17 +800,17 @@ export namespace payroll {
 		    return a;
 		}
 	}
-
-
+	
+	
 	export class ValidationIssue {
 	    employeeId: string;
 	    field: string;
 	    message: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ValidationIssue(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.employeeId = source["employeeId"];
@@ -776,7 +822,7 @@ export namespace payroll {
 }
 
 export namespace pointerservice {
-
+	
 	export class WireGuardConfig {
 	    enabled: boolean;
 	    address: string;
@@ -787,11 +833,11 @@ export namespace pointerservice {
 	    allowedIPs: string[];
 	    persistentKeepaliveSeconds: number;
 	    mtu: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new WireGuardConfig(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.enabled = source["enabled"];
@@ -811,11 +857,11 @@ export namespace pointerservice {
 	    port: number;
 	    allowedNetworks: string[];
 	    firewallConsent: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new HookConfig(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.enabled = source["enabled"];
@@ -828,17 +874,17 @@ export namespace pointerservice {
 	export class Config {
 	    hook: HookConfig;
 	    wireGuard: WireGuardConfig;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.hook = this.convertValues(source["hook"], HookConfig);
 	        this.wireGuard = this.convertValues(source["wireGuard"], WireGuardConfig);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -867,11 +913,11 @@ export namespace pointerservice {
 	    receivedBytes: number;
 	    sentBytes: number;
 	    message: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ConnectivityTestResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.target = source["target"];
@@ -885,15 +931,15 @@ export namespace pointerservice {
 	        this.message = source["message"];
 	    }
 	}
-
+	
 	export class Identity {
 	    privateKey: string;
 	    publicKey: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Identity(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.privateKey = source["privateKey"];
@@ -911,11 +957,11 @@ export namespace pointerservice {
 	    hasPrivateKey: boolean;
 	    publicKey: string;
 	    hasPresharedKey: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new PublicWireGuardConfig(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.enabled = source["enabled"];
@@ -933,17 +979,17 @@ export namespace pointerservice {
 	export class PublicConfig {
 	    hook: HookConfig;
 	    wireGuard: PublicWireGuardConfig;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new PublicConfig(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.hook = this.convertValues(source["hook"], HookConfig);
 	        this.wireGuard = this.convertValues(source["wireGuard"], PublicWireGuardConfig);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -962,7 +1008,7 @@ export namespace pointerservice {
 		    return a;
 		}
 	}
-
+	
 	export class Status {
 	    collectorActive: boolean;
 	    wireGuardActive: boolean;
@@ -976,11 +1022,11 @@ export namespace pointerservice {
 	    firewallGuidance: string;
 	    lastError: string;
 	    config: PublicConfig;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Status(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.collectorActive = source["collectorActive"];
@@ -996,7 +1042,7 @@ export namespace pointerservice {
 	        this.lastError = source["lastError"];
 	        this.config = this.convertValues(source["config"], PublicConfig);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1018,16 +1064,88 @@ export namespace pointerservice {
 
 }
 
-export namespace store {
+export namespace printing {
+	
+	export class Printer {
+	    name: string;
+	    systemDefault: boolean;
+	    storedDefault: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Printer(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.systemDefault = source["systemDefault"];
+	        this.storedDefault = source["storedDefault"];
+	    }
+	}
+	export class Request {
+	    documentName: string;
+	    printer: string;
+	    copies: number;
+	    pdfBase64: string;
+	    pageImages: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Request(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.documentName = source["documentName"];
+	        this.printer = source["printer"];
+	        this.copies = source["copies"];
+	        this.pdfBase64 = source["pdfBase64"];
+	        this.pageImages = source["pageImages"];
+	    }
+	}
 
+}
+
+export namespace signing {
+	
+	export class Template {
+	    id: string;
+	    name: string;
+	    pngBase64: string;
+	    x: number;
+	    y: number;
+	    width: number;
+	    createdAt: string;
+	    updatedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Template(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.pngBase64 = source["pngBase64"];
+	        this.x = source["x"];
+	        this.y = source["y"];
+	        this.width = source["width"];
+	        this.createdAt = source["createdAt"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+	}
+
+}
+
+export namespace store {
+	
 	export class CreatePeriodInput {
 	    period: string;
 	    copyFrom: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new CreatePeriodInput(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.period = source["period"];
@@ -1039,11 +1157,11 @@ export namespace store {
 	    rejected: number;
 	    errors: string[];
 	    durationMs: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ImportStats(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.imported = source["imported"];
@@ -1056,18 +1174,18 @@ export namespace store {
 	    items: payroll.Employee[];
 	    nextCursor: string;
 	    total: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Page(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.items = this.convertValues(source["items"], payroll.Employee);
 	        this.nextCursor = source["nextCursor"];
 	        this.total = source["total"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -1094,11 +1212,11 @@ export namespace store {
 	    grossCentimes: number;
 	    createdAt: string;
 	    closedAt: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Period(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.period = source["period"];
@@ -1112,3 +1230,4 @@ export namespace store {
 	}
 
 }
+

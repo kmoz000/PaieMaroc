@@ -6,6 +6,8 @@ import {auth} from '../models';
 import {main} from '../models';
 import {store} from '../models';
 import {pointerservice} from '../models';
+import {signing} from '../models';
+import {printing} from '../models';
 import {exporter} from '../models';
 
 export function AttendanceProfiles():Promise<Array<attendance.Profile>>;
@@ -26,6 +28,8 @@ export function DeleteEmployee(arg1:string):Promise<void>;
 
 export function DeletePeriod(arg1:string):Promise<void>;
 
+export function DeleteSignatureTemplate(arg1:string):Promise<void>;
+
 export function GenerateCNSSBDS(arg1:string):Promise<main.CNSSResult>;
 
 export function GeneratePointerWireGuardIdentity():Promise<pointerservice.Identity>;
@@ -35,6 +39,8 @@ export function GetAttendanceWorkPolicy():Promise<attendance.WorkPolicy>;
 export function GetAuthState():Promise<main.AuthState>;
 
 export function GetPointerConnectivity():Promise<pointerservice.Status>;
+
+export function GetPrinterState():Promise<main.PrinterState>;
 
 export function ImportEmployeesCSV():Promise<store.ImportStats>;
 
@@ -56,6 +62,8 @@ export function ListPeriodEmployees(arg1:string,arg2:string,arg3:string,arg4:num
 
 export function ListPeriods():Promise<Array<store.Period>>;
 
+export function ListSignatureTemplates():Promise<Array<signing.Template>>;
+
 export function ListUsers():Promise<Array<auth.User>>;
 
 export function Login(arg1:string,arg2:string):Promise<main.AuthState>;
@@ -63,6 +71,8 @@ export function Login(arg1:string,arg2:string):Promise<main.AuthState>;
 export function Logout():Promise<void>;
 
 export function PreviewExport(arg1:main.ExportInput):Promise<main.ExportPreview>;
+
+export function PrintSignedDocument(arg1:printing.Request):Promise<void>;
 
 export function ReopenPeriod(arg1:string):Promise<void>;
 
@@ -87,6 +97,12 @@ export function SaveExport(arg1:main.ExportInput):Promise<main.ExportResult>;
 export function SavePeriodEmployee(arg1:string,arg2:payroll.Employee):Promise<void>;
 
 export function SavePointerConnectivity(arg1:pointerservice.Config):Promise<pointerservice.Status>;
+
+export function SaveSignatureTemplate(arg1:signing.Template):Promise<signing.Template>;
+
+export function SaveSignedDocument(arg1:string,arg2:string):Promise<main.SignedDocumentResult>;
+
+export function SetDefaultPrinter(arg1:string):Promise<main.PrinterState>;
 
 export function SetUserEnabled(arg1:number,arg2:boolean):Promise<void>;
 
