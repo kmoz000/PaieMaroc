@@ -213,7 +213,20 @@ jobs:
           mkdir -p "$staging"
           cp -R "$app" "$staging/PaieMaroc.app"
           ln -s /Applications "$staging/Applications"
-          hdiutil create -volname "PaieMaroc" -srcfolder "$staging" -ov -format UDZO "$dmg"
+          # hdiutil échoue par intermittence sur les runners GitHub macOS avec
+          # « No space left on device » alors que le disque est loin d'être
+          # plein (actions/runner-images#7522) : on réessaie plusieurs fois.
+          created=0
+          for attempt in 1 2 3 4 5; do
+            if hdiutil create -volname "PaieMaroc" -srcfolder "$staging" -ov -format UDZO "$dmg"; then
+              created=1
+              break
+            fi
+            echo "hdiutil a échoué (tentative $attempt/5), nouvel essai dans 15 s…" >&2
+            rm -f "$dmg"
+            sleep 15
+          done
+          [ "$created" = "1" ]
           codesign --force --sign - "$dmg"
           codesign --verify --strict --verbose=2 "$dmg"
           rm -rf "$app" "$staging"
