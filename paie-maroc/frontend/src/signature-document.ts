@@ -309,13 +309,35 @@ export function bytesToBase64(bytes: Uint8Array): string {
 }
 
 /**
- * Rastérise le PDF signé en pages PNG (~200 ppp) pour l'impression Windows,
- * page par page pour limiter la mémoire.
+ * Rastérise le PDF signé pour l'impression Windows : JPEG ~150 ppp, page
+ * par page, pour limiter la mémoire et la taille du transfert vers Go.
  */
 export async function rasterizeForPrint(pdfBytes: Uint8Array): Promise<string[]> {
-  const canvases = await renderPDFPages(pdfBytes.slice(), PRINT_WIDTH);
-  return canvases.map((canvas) => {
-    const dataURL = canvas.toDataURL("image/png");
-    return dataURL.slice(dataURL.indexOf(",") + 1);
-  });
+  const targetWidth = 1240; // ≈ 150 ppp sur une largeur A4.
+  const loadingTask = getDocument({ data: pdfBytes.slice() });
+  const documentPDF = await loadingTask.promise;
+  const pages: string[] = [];
+  try {
+    for (let number = 1; number <= documentPDF.numPages; number++) {
+      const page = await documentPDF.getPage(number);
+      const baseViewport = page.getViewport({ scale: 1 });
+      const viewport = page.getViewport({ scale: targetWidth / baseViewport.width });
+      const canvas = window.document.createElement("canvas");
+      canvas.width = Math.round(viewport.width);
+      canvas.height = Math.round(viewport.height);
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Canvas indisponible pour l'impression.");
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      await page.render({ canvas, canvasContext: context, viewport }).promise;
+      const dataURL = canvas.toDataURL("image/jpeg", 0.9);
+      pages.push(dataURL.slice(dataURL.indexOf(",") + 1));
+      page.cleanup();
+      canvas.width = 0;
+      canvas.height = 0;
+    }
+  } finally {
+    await loadingTask.destroy();
+  }
+  return pages;
 }

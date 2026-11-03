@@ -26,7 +26,9 @@ func listWindows() ([]Printer, error) {
 		return nil, err
 	}
 	command := "Get-CimInstance Win32_Printer | Select-Object Name,Default | ConvertTo-Json -Compress"
-	output, err := exec.Command(powershell, "-NoProfile", "-NonInteractive", "-Command", command).CombinedOutput()
+	cmd := exec.Command(powershell, "-NoProfile", "-NonInteractive", "-Command", command)
+	hideConsole(cmd)
+	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("liste des imprimantes impossible: %s", firstLine(strings.TrimSpace(string(output)), err))
 	}
@@ -78,21 +80,21 @@ foreach ($size in $document.PrinterSettings.PaperSizes) {
 $script:pageIndex = 0
 $pages = @($job.pages)
 $document.add_PrintPage({
-  param($sender, $event)
+  param($sender, $e)
   $image = [System.Drawing.Image]::FromFile($pages[$script:pageIndex])
   try {
-    $area = $event.PageSettings.PrintableArea
+    $area = $e.PageSettings.PrintableArea
     $scale = [Math]::Min($area.Width / $image.Width, $area.Height / $image.Height)
     $width = $image.Width * $scale
     $height = $image.Height * $scale
-    $left = $area.X + (($area.Width - $width) / 2) - $event.PageSettings.HardMarginX
-    $top = $area.Y + (($area.Height - $height) / 2) - $event.PageSettings.HardMarginY
-    $event.Graphics.DrawImage($image, $left, $top, $width, $height)
+    $left = $area.X + (($area.Width - $width) / 2) - $e.PageSettings.HardMarginX
+    $top = $area.Y + (($area.Height - $height) / 2) - $e.PageSettings.HardMarginY
+    $e.Graphics.DrawImage($image, $left, $top, $width, $height)
   } finally {
     $image.Dispose()
   }
   $script:pageIndex++
-  $event.HasMorePages = $script:pageIndex -lt $pages.Count
+  $e.HasMorePages = $script:pageIndex -lt $pages.Count
 })
 $document.Print()
 `
@@ -123,7 +125,7 @@ func printWindows(request Request, printer string) error {
 		if decodeErr != nil {
 			return fmt.Errorf("décodage de la page %d à imprimer: %w", index+1, decodeErr)
 		}
-		path := filepath.Join(directory, fmt.Sprintf("page-%03d.png", index+1))
+		path := filepath.Join(directory, fmt.Sprintf("page-%03d.img", index+1))
 		if writeErr := os.WriteFile(path, content, 0o600); writeErr != nil {
 			return fmt.Errorf("écriture de la page %d à imprimer: %w", index+1, writeErr)
 		}
@@ -147,11 +149,13 @@ func printWindows(request Request, printer string) error {
 	if err := os.WriteFile(scriptPath, []byte(windowsPrintScript), 0o600); err != nil {
 		return fmt.Errorf("écriture du script d'impression: %w", err)
 	}
-	output, err := exec.Command(
+	cmd := exec.Command(
 		powershell,
 		"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
 		"-File", scriptPath, jobPath,
-	).CombinedOutput()
+	)
+	hideConsole(cmd)
+	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("impression refusée: %s", firstLine(strings.TrimSpace(string(output)), err))
 	}

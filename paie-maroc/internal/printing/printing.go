@@ -29,7 +29,8 @@ type Settings struct {
 }
 
 // Request carries one print job. PDFBase64 is used on macOS and Linux,
-// PageImages (PNG, already rasterized in A4 proportions) on Windows.
+// PageImages (PNG or JPEG pages, already rasterized in A4 proportions) on
+// Windows, where System.Drawing sniffs the format from the file content.
 type Request struct {
 	DocumentName string   `json:"documentName"`
 	Printer      string   `json:"printer"`

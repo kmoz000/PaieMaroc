@@ -160,7 +160,7 @@ func persist(path string, templates []Template) error {
 }
 
 func clampFraction(value float64, fallback float64) float64 {
-	if value <= 0 || value >= 1 {
+	if value < 0 || value >= 1 {
 		return fallback
 	}
 	return value
