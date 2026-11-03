@@ -184,6 +184,14 @@ jobs:
         run: |
           Remove-Item $env:PAIEMAROC_CERTIFICATE_PATH, $env:PAIEMAROC_PUBLIC_CERTIFICATE_PATH -Force
 
+      - name: Libérer de l'espace disque macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          sudo rm -rf /Library/Developer/CoreSimulator/Volumes/* \
+            "$HOME/Library/Developer/CoreSimulator" 2>/dev/null || true
+          df -h /
+
       - name: Compiler macOS universel
         if: runner.os == 'macOS'
         run: wails build -clean -trimpath -platform darwin/universal -o PaieMaroc
@@ -192,6 +200,11 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: |
+          # L'image macos-15 laisse très peu d'espace libre : on supprime les
+          # caches de compilation avant de créer le DMG.
+          go clean -cache -modcache 2>/dev/null || true
+          rm -rf frontend/node_modules 2>/dev/null || true
+          df -h /
           app="build/bin/PaieMaroc.app"
           dmg="build/bin/PaieMaroc-${GITHUB_REF_NAME}-macOS-universal-SELF-SIGNED.dmg"
           staging="$RUNNER_TEMP/paie-maroc-dmg"
